@@ -4,10 +4,16 @@
  * 本机 hosts 把 github.com、api.github.com 指向 127.0.0.1，由 Steam++ 加速器反代，所以直连可用。
  *
  * 用法：
- *   node tools/gh-status.mjs                        # 默认查 origin 对应的仓库
- *   node tools/gh-status.mjs owner/repo             # 指定仓库
- *   node tools/gh-status.mjs owner/repo --logs 123  # 拉某次 run 的日志摘要
- *   GH_TOKEN=xxx node tools/gh-status.mjs           # 带 token（避免限流、可读私有）
+ *   node --use-system-ca tools/gh-status.mjs                        # 默认查 origin 对应的仓库
+ *   node --use-system-ca tools/gh-status.mjs owner/repo             # 指定仓库
+ *   node --use-system-ca tools/gh-status.mjs --run 12345678         # 只看某一次运行（含失败 annotation）
+ *   GH_TOKEN=xxx node --use-system-ca tools/gh-status.mjs           # 带 token（避免限流、可读私有）
+ *
+ * 必须加 --use-system-ca：本机 hosts 把 github.com / api.github.com 指向 127.0.0.1，
+ * 由 Steam++ 加速器（监听 0.0.0.0:443）反代，证书是自签的，Node 默认不信任，
+ * 否则报 UNABLE_TO_VERIFY_LEAF_SIGNATURE。
+ *
+ * 未认证时 API 限流只有 60 次/小时，别写成高频轮询；需要盯部署用 gh-deploy-watch.mjs。
  */
 import { execFileSync } from 'node:child_process'
 

@@ -1,0 +1,36 @@
+fix(blog): 文章页不再把「内容库未就绪」当成 404（线上 15 秒假 404）
+
+线上实测的缺陷：打开一篇正常文章会经历
+「文章正常显示（1.2s）→ 假 404『页面走丢了』（20.6s）→ 文章恢复（35.9s）」，
+中间 15.3 秒显示的是自家 404 页。
+
+根因：app/pages/blog/[...slug].vue 里
+
+    if (!post.value) throw createError({ statusCode: 404, fatal: true })
+
+把「内容数据此刻拿不到」直接判成「文章不存在」。而客户端内容库是 844 KB 的
+WASM SQLite，实测量到它 24.8 秒才开始下载、35.6 秒才装好；这期间任何一次路由数据
+解析（hydration 出现 mismatch、Vue 丢掉预渲染结果重新渲染时就会触发）都必然拿到空值。
+站点别处（首页/列表/标签）同样用 queryCollection 但不抛错，所以只有文章页会闪 404。
+
+修法：只在服务端（预渲染）判定 404 —— 那时 HTTP 状态码也是 404，SEO 语义正确；
+客户端把「暂时没数据」交给模板的 v-if/v-else 处理，显示「正在加载文章…」并给出回列表入口。
+
+同时修掉两个会让诊断变难的问题：
+
+- tools/qa.mjs 的 goto 一发出 Page.navigate 就轮询 document.readyState，那一刻读到的
+  还是上一个文档的 'complete'，循环立刻 break，实际只靠一句固定 sleep(1200) —— 本机够用、
+  线上不够，这正是文章页三条 warn 长期被当成「假阳性」的原因（其实是真阳性）。
+  改为先等 URL 提交再等 load。
+- app/components/desktop/TopBar.vue 的 menus 由普通对象改成 computed：它的 checked
+  原本在 setup 时求值一次就被冻结，从别处改主题后菜单勾选标记不会跟着动（假 UI）。
+  e2e 新增回归用例「『显示』菜单勾选跟随设置变化」验证它。
+
+新增诊断工具（这次全靠它们定位问题）：
+- tools/live-probe.mjs：在真浏览器里打开任意 URL，报告关键选择器**首次出现时间与出现/消失
+  时间线**，并输出关键资源时序（wasm/dump/payload 的耗时与状态码）。闪空类缺陷只有看
+  时间线才发现得了。
+- tools/draft-probe.mjs + tools/dump-audit.mjs：审计 `draft: true` 的草稿是否漏进公开的
+  `/__nuxt_content/blog/sql_dump.txt`（实测会漏：那文件是原始 SQLite 导出、含完整正文，
+  而 @nuxt/content 构建期没有任何按 draft 字段过滤行的逻辑）。
+- tools/serve-static.mjs 增加 --delay-wasm，用来受控复现慢网络。

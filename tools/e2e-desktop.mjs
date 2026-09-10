@@ -548,6 +548,59 @@ async function main() {
   const lightOn = await waitFor(async () => !(await evaluate(`document.documentElement.classList.contains('dark')`)), 5000, 200)
   record('切回浅色外观', lightOn, `body=${darkBg}`)
 
+  /* ---------- 6.8 顶栏「显示」菜单的勾选必须跟着设置走 ---------- */
+  // 回归用例。`menus` 原本是普通对象，所有 checked 在 setup 时求值一次就被冻结，
+  // 于是从别处（控制中心 / 菜单自己）改了主题后，菜单里的勾选标记永远停在初始状态 —— 假 UI。
+  // 改成 computed 之后本用例必须通过。
+  // 注意：「显示」菜单里的项都没有 icon，所以 button 内的 svg 只可能是勾选标记。
+  const readViewChecks = `
+    (() => {
+      const panel = document.querySelector('[data-menubar-panel="view"]')
+      if (!panel) return null
+      const out = {}
+      for (const btn of panel.querySelectorAll('button.mac-menu-item')) {
+        const label = (btn.querySelector('.flex-1')?.textContent || '').trim()
+        if (label) out[label] = Boolean(btn.querySelector('svg'))
+      }
+      return out
+    })()
+  `
+  const clickViewItem = label => `
+    (() => {
+      const btn = [...document.querySelectorAll('[data-menubar-panel="view"] button.mac-menu-item')]
+        .find(b => (b.querySelector('.flex-1')?.textContent || '').trim() === ${JSON.stringify(label)})
+      if (!btn) return false
+      btn.click()
+      return true
+    })()
+  `
+
+  await evaluate(`document.querySelector('[data-menubar-menu="view"]')?.click()`)
+  await waitForElement('[data-menubar-panel="view"]', 5000)
+  const viewChecksLight = await evaluate(readViewChecks)
+
+  const darkItemClicked = await evaluate(clickViewItem('深色外观'))
+  const wentDark = await waitFor(async () => await evaluate(`document.documentElement.classList.contains('dark')`), 5000, 200)
+
+  await evaluate(`document.querySelector('[data-menubar-menu="view"]')?.click()`)
+  await waitForElement('[data-menubar-panel="view"]', 5000)
+  const viewChecksDark = await evaluate(readViewChecks)
+
+  // 还原浅色，避免影响后面的用例
+  await evaluate(clickViewItem('浅色外观'))
+  await waitFor(async () => !(await evaluate(`document.documentElement.classList.contains('dark')`)), 5000, 200)
+
+  const checksTrackSettings = Boolean(
+    darkItemClicked && wentDark
+    && viewChecksLight?.['浅色外观'] === true && viewChecksLight?.['深色外观'] === false
+    && viewChecksDark?.['深色外观'] === true && viewChecksDark?.['浅色外观'] === false,
+  )
+  record(
+    '「显示」菜单勾选跟随设置变化',
+    checksTrackSettings,
+    `切换前 浅色=${viewChecksLight?.['浅色外观']} 深色=${viewChecksLight?.['深色外观']} → 切换后 浅色=${viewChecksDark?.['浅色外观']} 深色=${viewChecksDark?.['深色外观']}`,
+  )
+
   /* ---------- 7. 彩蛋：一屏模式 ---------- */
   const controlPanelOpen = await evaluate(`Boolean(document.querySelector('[data-menubar-panel="control"]'))`)
   if (!controlPanelOpen) {

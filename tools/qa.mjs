@@ -73,10 +73,37 @@ async function dismissBoot() {
   return true
 }
 
+/**
+ * 等到「新文档已提交 且 load 完成」。
+ *
+ * 为什么不能一发出 Page.navigate 就轮询 document.readyState：那一刻 `document`
+ * 还指向**上一个文档**，而它早就是 'complete' 了 —— 循环第一轮就 break，
+ * 于是整个等待只剩最后那句固定 sleep(1200)。本机 localhost 够用；
+ * 线上要过 TLS + GitHub Pages 的 301（无尾斜杠 → 尾斜杠）+ 若干 chunk，
+ * 1200ms 就不够，表现为文章页三条假 warn（「找不到 mac 窗口」「缺少 Safari 工具栏」
+ * 「缺少正文容器」）。实测线上文章页壳的渲染时刻是 854ms（暖连接），冷启动更晚。
+ *
+ * 反过来也要小心：不能只等 `.mac-menubar` 出现就返回 —— 它在开机动画期间就已经渲染了，
+ * 那样 dismissBoot() 会因为 [data-boot-screen] 还没出现而不点登录，开机黑屏一直盖着，
+ * 后面采对比度就会采到黑底（曾实测出 rgba(7140,...) 这种非法值）。
+ * 所以这里保持原来的「等 load + 1200ms」语义，只补上前置的文档提交确认。
+ */
 async function goto(path) {
   await send('Page.navigate', { url: BASE + path })
-  for (let i = 0; i < 60; i++) {
-    if ((await evaluate('document.readyState')) === 'complete') break
+  // 1) 先等 URL 真的切过去（剥掉协议/主机/前导斜杠后比前缀；线上会多一次 301）
+  const want = path.replace(/^\/+/, '')
+  const start = Date.now()
+  while (Date.now() - start < 20000) {
+    const href = await evaluate('location.href')
+    if (typeof href === 'string' && href.replace(/^https?:\/\/[^/]+/, '').replace(/^\/+/, '').startsWith(want)) break
+    await sleep(100)
+  }
+  // 2) 再等新文档 load 完成（此刻读 readyState 才是可信的）
+  for (let i = 0; i < 100; i++) {
+    try {
+      if ((await evaluate('document.readyState')) === 'complete') break
+    }
+    catch {}
     await sleep(200)
   }
   await sleep(1200)

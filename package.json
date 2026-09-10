@@ -7,6 +7,11 @@
     "build": "nuxt build",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
+    "serve:static": "node tools/serve-static.mjs",
+    "verify:static": "node tools/verify.mjs --base http://127.0.0.1:4180 --skip-comments",
+    "e2e:static": "node tools/e2e-desktop.mjs --base http://127.0.0.1:4180",
+    "qa:static": "node tools/qa.mjs --base http://127.0.0.1:4180",
+    "assets:check": "node tools/asset-check.mjs",
     "postinstall": "node scripts/install-sqlite-prebuild.mjs && nuxt prepare"
   },
   "dependencies": {

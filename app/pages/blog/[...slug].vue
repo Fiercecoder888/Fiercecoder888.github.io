@@ -65,6 +65,17 @@
       </div>
     </footer>
   </article>
+
+  <!-- 客户端上 post 暂时为空 = 内容库还没就绪（见 script 里的长注释），不能当成 404 -->
+  <div v-else class="py-16 text-center">
+    <p class="text-sm text-gray-500">正在加载文章…</p>
+    <p class="mt-2 text-xs text-gray-400">
+      如果长时间停在这里，说明这篇文章不存在，或者内容库还没加载完。
+    </p>
+    <NuxtLink to="/blog" class="mt-4 inline-block text-sm text-blue-600 transition hover:text-blue-700">
+      返回文章列表 →
+    </NuxtLink>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -84,7 +95,15 @@ const { data: post } = await useAsyncData(`post-${route.path}`, () =>
   queryCollection('blog').path(contentPath.value).first(),
 )
 
-if (!post.value) {
+// 只有「服务端预渲染时查不到」才判定 404 —— 这时 HTTP 状态码也是 404，SEO 语义正确。
+//
+// 客户端**绝对不能**这么判：静态托管下内容库是 844 KB 的 WASM SQLite，
+// 线上实测（2026-09-10）它到 24.8 秒才开始下载、35.6 秒才装好；这期间任何一次
+// 路由数据解析（hydration 出现 mismatch、Vue 丢掉预渲染结果重新渲染时就会触发）
+// 都必然拿到空值。过去这里直接抛 fatal 404，于是正常文章页会出现
+// 「文章正常显示 → 15.3 秒假 404『页面走丢了』→ 文章才恢复」。
+// 客户端的「暂时没数据」交给模板的 v-if / v-else 处理，不当作 404。
+if (import.meta.server && !post.value) {
   throw createError({ statusCode: 404, statusMessage: '文章不存在', fatal: true })
 }
 

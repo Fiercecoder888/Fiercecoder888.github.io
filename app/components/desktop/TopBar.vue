@@ -238,7 +238,10 @@ const appMenus: { id: 'app' | 'file' | 'edit' | 'view' | 'go' | 'window' | 'help
   { id: 'help', title: '帮助' },
 ]
 
-const menus: Record<string, MenuItem[]> = {
+// 必须是 computed：下面每一项的 checked 都跟着 settings 走。
+// 写成普通对象会在 setup 时求值一次就被冻结，之后从控制中心改主题/字体/一屏模式，
+// 菜单里的勾选标记会永远停在初始状态（假 UI）。
+const menus = computed<Record<string, MenuItem[]>>(() => ({
   system: [
     { label: '关于本站', icon: 'user', action: () => windows.open('about') },
     { label: '分隔', shortcut: '' },
@@ -315,7 +318,7 @@ const menus: Record<string, MenuItem[]> = {
     { label: 'RSS 订阅', action: () => openExternal('/rss.xml') },
   ],
   clock: [],
-}
+}))
 
 const TEXT_MENUS = ['system', 'app', 'file', 'edit', 'view', 'go', 'window', 'help'] as const
 
@@ -341,7 +344,7 @@ function syncNarrow() {
 const showTextPanel = computed(() => TEXT_MENUS.includes(ui.menuBarMenu as typeof TEXT_MENUS[number]))
 
 const textMenuItems = computed<MenuItem[]>(() => {
-  const raw = menus[ui.menuBarMenu as string] ?? []
+  const raw = menus.value[ui.menuBarMenu as string] ?? []
   return raw.map(item => (item.label.trim() === '分隔' ? { separator: true, label: '' } : item))
 })
 

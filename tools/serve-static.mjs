@@ -11,7 +11,13 @@
  *   /          → /index.html
  *   找不到     → 回 404.html，且 HTTP 状态码是 404（不是 200）
  *
- * 用法: node tools/serve-static.mjs [--root .output/public] [--port 4180]
+ * 用法: node tools/serve-static.mjs [--root .output/public] [--port 4180] [--delay-wasm 9000]
+ *
+ * --delay-wasm <ms>：人为拖延 .wasm 的响应，用来**受控复现慢网络**。
+ * 本站桌面的文章正文、Spotlight、终端 ls、Finder 列表都依赖客户端内容库
+ * （`sqlite3.*.wasm` + `sql_dump.txt`）。实测在某条慢链路上这个 wasm 要 8.7 秒才到
+ * （844 KB gzip ≈ 97 KB/s），此时线上能观察到 e2e 8 项失败 / qa 文章页 3 条 warn。
+ * 加这个开关就能在本地复现同一现象，从而判断那是「慢链路的必然结果」还是「代码缺陷」。
  */
 import { createServer } from 'node:http'
 import { existsSync, statSync, readFileSync } from 'node:fs'
@@ -24,6 +30,7 @@ const arg = (name, fallback) => {
 }
 const ROOT = resolve(arg('root', '.output/public'))
 const PORT = Number(arg('port', '4180'))
+const DELAY_WASM = Number(arg('delay-wasm', '0'))
 
 if (!existsSync(ROOT)) {
   console.error(`产物目录不存在: ${ROOT}\n先跑 pnpm generate`)
@@ -73,12 +80,20 @@ const server = createServer((req, res) => {
 
   if (hit) {
     const body = readFileSync(hit)
-    res.writeHead(200, {
-      'content-type': TYPES[extname(hit).toLowerCase()] || 'application/octet-stream',
-      'content-length': body.length,
-      'cache-control': 'no-store',
-    })
-    res.end(body)
+    const send = () => {
+      res.writeHead(200, {
+        'content-type': TYPES[extname(hit).toLowerCase()] || 'application/octet-stream',
+        'content-length': body.length,
+        'cache-control': 'no-store',
+      })
+      res.end(body)
+    }
+    // 人为拖延 wasm，用来受控复现慢网络（见文件头说明）
+    if (DELAY_WASM > 0 && hit.toLowerCase().endsWith('.wasm')) {
+      setTimeout(send, DELAY_WASM)
+      return
+    }
+    send()
     return
   }
 
