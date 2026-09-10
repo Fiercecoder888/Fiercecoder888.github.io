@@ -115,9 +115,24 @@ try {
   await send('Runtime.enable')
   await send('Page.enable')
 
+  // --goto-first <url>：先打开这个地址，再点击 --click <selector> 跳到下一页。
+  // 用来走「真人路径」（首页 → 点文章卡片，SPA 客户端路由），
+  // 它和「直接硬刷新目标 URL」是两条不同的代码路径，必须分别验。
+  const clickSel = arg('click', '')
+  const gotoFirst = arg('goto-first', '')
   const t0 = Date.now()
-  const nav = await send('Page.navigate', { url: URL_ })
-  console.log(`导航: ${URL_}`)
+  if (gotoFirst) {
+    console.log(`先打开: ${gotoFirst}`)
+    await send('Page.navigate', { url: gotoFirst })
+    await sleep(Number(arg('first-wait', '4000')))
+  }
+  if (clickSel) {
+    const clicked = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(clickSel)}); if (!el) return false; el.click(); return true })()`)
+    console.log(`点击 ${clickSel} → ${clicked ? '已点击' : '没找到该元素'}`)
+    await sleep(500)
+  }
+  const nav = clickSel || gotoFirst ? { result: {} } : await send('Page.navigate', { url: URL_ })
+  if (!clickSel) console.log(`导航: ${URL_}`)
   if (nav.result?.errorText) console.log(`  navigate errorText: ${nav.result.errorText}`)
 
   const SEL = [
