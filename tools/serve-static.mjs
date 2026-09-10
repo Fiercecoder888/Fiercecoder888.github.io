@@ -68,28 +68,43 @@ function resolveFile(urlPath) {
   const safe = normalize(decodeURIComponent(urlPath.split('?')[0])).replace(/^(\.\.[/\\])+/, '')
   const abs = join(ROOT, safe)
   if (!abs.startsWith(ROOT)) return null
-  if (isFile(abs)) return abs
-  if (isFile(join(abs, 'index.html'))) return join(abs, 'index.html')
-  if (isFile(`${abs}.html`)) return `${abs}.html`
+  if (isFile(abs)) return { file: abs, dirIndex: false }
+  if (isFile(join(abs, 'index.html'))) return { file: join(abs, 'index.html'), dirIndex: true }
+  if (isFile(`${abs}.html`)) return { file: `${abs}.html`, dirIndex: false }
   return null
 }
 
 const server = createServer((req, res) => {
+  const rawPath = (req.url || '/').split('?')[0]
   const hit = resolveFile(req.url || '/')
   const four04 = join(ROOT, '404.html')
 
+  // GitHub Pages 的真实行为：目录式路径若没有尾斜杠，会 301 到带尾斜杠的地址。
+  // 这一条必须复刻 —— 少了它，本地就测不出「线上和本地表现不一致」的那类缺陷。
+  // 实际踩到的例子：文章页用 `useAsyncData(\`post-${route.path}\`)` 做 key，
+  // 预渲染时 route.path 是 `/blog/hello-blog`，而线上被 301 成 `/blog/hello-blog/`
+  // 之后 key 变成 `post-/blog/hello-blog/`，对不上 → 复用不到预渲染 payload
+  // → 客户端重新查内容库（WASM，慢）→ 期间拿到空值。
+  if (hit?.dirIndex && !rawPath.endsWith('/')) {
+    // 注意：rawPath 已经是百分号编码的（浏览器就是这么发的），**不要再 encodeURI 一遍**，
+    // 否则 `%E5%AD%A6` 会变成 `%25E5%25AD%25A6` —— 双重编码，含中文的路径会 404。
+    res.writeHead(301, { location: `${rawPath}/`, 'cache-control': 'no-store' })
+    res.end()
+    return
+  }
+
   if (hit) {
-    const body = readFileSync(hit)
+    const body = readFileSync(hit.file)
     const send = () => {
       res.writeHead(200, {
-        'content-type': TYPES[extname(hit).toLowerCase()] || 'application/octet-stream',
+        'content-type': TYPES[extname(hit.file).toLowerCase()] || 'application/octet-stream',
         'content-length': body.length,
         'cache-control': 'no-store',
       })
       res.end(body)
     }
     // 人为拖延 wasm，用来受控复现慢网络（见文件头说明）
-    if (DELAY_WASM > 0 && hit.toLowerCase().endsWith('.wasm')) {
+    if (DELAY_WASM > 0 && hit.file.toLowerCase().endsWith('.wasm')) {
       setTimeout(send, DELAY_WASM)
       return
     }

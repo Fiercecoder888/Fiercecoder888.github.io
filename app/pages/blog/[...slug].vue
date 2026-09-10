@@ -81,17 +81,25 @@
 <script setup lang="ts">
 const route = useRoute()
 
-// route.path 是 URL 编码后的（中文 slug 会被编码），Content 里存的是解码后的 path，这里统一解码
+// route.path 是 URL 编码后的（中文 slug 会被编码），Content 里存的是解码后的 path，这里统一解码。
+//
+// 同时必须**去掉尾斜杠**：GitHub Pages 会把 `/blog/xxx` 301 到 `/blog/xxx/`，
+// 于是客户端 route.path 带尾斜杠、而预渲染时是 `post-/blog/xxx`（无尾斜杠）。
+// 这个值被拼进下面 useAsyncData 的 key，一旦不一致就复用不到预渲染 payload
+// （实测线上 `_payload.json` 里的 key 原文是 `post-\u002Fblog\u002Fhello-blog`），
+// 客户端只能重新查内容库 —— 那是 844 KB 的 WASM SQLite，慢链路上要 25～35 秒，
+// 期间文章正文根本出不来。归一化之后客户端能直接命中 payload，正文立刻就有。
 const contentPath = computed(() => {
   try {
-    return decodeURIComponent(route.path)
+    const decoded = decodeURIComponent(route.path)
+    return decoded.length > 1 ? decoded.replace(/\/+$/, '') : decoded
   }
   catch {
-    return route.path
+    return route.path.replace(/\/+$/, '') || '/'
   }
 })
 
-const { data: post } = await useAsyncData(`post-${route.path}`, () =>
+const { data: post } = await useAsyncData(`post-${contentPath.value}`, () =>
   queryCollection('blog').path(contentPath.value).first(),
 )
 
