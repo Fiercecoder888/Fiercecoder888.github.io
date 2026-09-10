@@ -182,9 +182,39 @@ my-blog/
 └─ nuxt.config.ts
 ```
 
-## 部署
+## 部署到 GitHub Pages（免费域名）
 
-### 纯静态（推荐，但评论不可用）
+本站已配好 GitHub Actions 工作流 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)：**推送到 `main` 就自动构建并发布**。
+
+### 首次部署（用户站，推荐）
+
+仓库名必须是 `<你的用户名>.github.io`，网址就是 `https://<你的用户名>.github.io/`，**本项目不需要改任何代码**（当前已配置为 `https://fiercecoder.github.io`）。
+
+```powershell
+git push -u origin main
+```
+
+推完后去仓库 **Settings → Pages → Build and deployment → Source 选 “GitHub Actions”**，等 Actions 跑完（首次 2-4 分钟）即可访问。
+
+### 更新站点
+
+```powershell
+git add -A
+git commit -m "update"
+git push
+```
+
+### 三个注意点
+
+1. **评论在 GitHub Pages 上不可用**（`/api/comments` 需要 Node 常驻服务）。前端已做优雅降级，会显示「当前是静态部署…」的说明，不是 bug。
+2. **`.nojekyll` 不能少**：GitHub Pages 默认跑 Jekyll，会忽略 `_nuxt/` 这类下划线开头的目录，导致样式和脚本 404。工作流里已自动 `touch .output/public/.nojekyll`。
+3. **`NUXT_PUBLIC_SITE_URL` 决定 sitemap / RSS / llms.txt 里的绝对地址**：工作流会自动注入 Pages 地址；本地生成时用 `shared/site.ts` 的 `url` 兜底。
+
+> 完整步骤、自定义域名、以及「项目站（带子路径）」的坑，见 [`docs/部署.md`](docs/部署.md)。
+
+## 其他部署方式
+
+### 纯静态（评论不可用）
 
 1. 设环境变量 `NUXT_PUBLIC_SITE_URL=https://你的域名`（否则 sitemap/RSS 里是 localhost）
 2. `pnpm generate`，把 `.output/public` 上传到 Cloudflare Pages / Vercel / 阿里云 OSS + CDN

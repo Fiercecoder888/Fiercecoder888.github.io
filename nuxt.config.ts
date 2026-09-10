@@ -20,10 +20,10 @@ export default defineNuxtConfig({
     plugins: [tailwindcss()],
   },
 
-  // 站点信息：部署时用环境变量覆盖 NUXT_PUBLIC_SITE_URL
+  // 站点信息：部署时用环境变量 NUXT_PUBLIC_SITE_URL 覆盖，本地用 shared/site.ts 的 url
   runtimeConfig: {
     public: {
-      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || SITE.url,
     },
   },
 
