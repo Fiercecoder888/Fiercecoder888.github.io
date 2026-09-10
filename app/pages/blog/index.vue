@@ -1,10 +1,20 @@
 <template>
   <div>
     <header class="mb-8 border-b border-gray-200 pb-6">
-      <h1 class="text-3xl font-bold tracking-tight text-gray-800">全部文章</h1>
-      <p class="mt-2 text-sm text-gray-500">
-        共 <span class="font-medium text-gray-700">{{ posts?.length ?? 0 }}</span> 篇 · 按年份归档
-      </p>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 class="text-3xl font-bold tracking-tight text-gray-800">全部文章</h1>
+          <p class="mt-2 text-sm text-gray-500">
+            共 <span class="font-medium text-gray-700">{{ posts?.length ?? 0 }}</span> 篇 · 按年份归档
+          </p>
+        </div>
+        <NuxtLink
+          to="/worklog"
+          class="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600 transition hover:border-blue-300 hover:text-blue-600"
+        >
+          工作日志 →
+        </NuxtLink>
+      </div>
     </header>
 
     <div v-if="posts?.length" class="space-y-10">

@@ -1,7 +1,12 @@
 /**
- * 站点与作者信息 —— 想换成自己的信息，**只改这个文件**。
- * 全站引用它：首页名片、关于页、页脚、菜单栏、开机页、Finder、关于本站窗口、
- * RSS / llms.txt / sitemap 的站点名、SEO 默认标题与描述。
+ * 站点与作者信息 —— 大部分信息改这里就够了。
+ *
+ * 但**不是只改这个文件**：下面这些地方的信息是写死在代码里的，改这里不会跟着变，
+ * 清单与建议见 `docs/个人信息填充清单.md`：
+ *   - 文章页 JSON-LD 的作者、文章页页脚「本文首发于…」（app/pages/blog/[...slug].vue）
+ *   - 桌面「关于本站」窗口的头像与文案（app/components/desktop/AboutWindow.vue）
+ *   - 终端 whoami / pwd 的输出（app/components/desktop/TerminalWindow.vue）
+ *   - 标签页图标里的字（public/favicon.svg）
  */
 export const SITE = {
   /** 站点名（出现在标题栏、菜单栏、RSS、llms.txt、页脚） */
@@ -21,13 +26,21 @@ export const SITE = {
 
   /** 以下信息会出现在「关于我」页面 */
   location: '中国',
+  /** 邮箱：关于页会渲染成可点的 mailto 链接。不想公开就填空串 '' */
   email: 'you@example.com',
+  /** GitHub：关于页会渲染成可点的链接（写 github.com/xxx 即可，会自动补 https://）。不想公开就填空串 '' */
   github: 'github.com/yourname',
-  /** 可以随便加，会按顺序渲染到关于页 */
+  /**
+   * 其它社交链接（掘金 / 知乎 / X / 个人域名…），按顺序渲染到关于页；
+   * 值只要长得像网址或邮箱，就会自动变成可点链接。
+   *
+   * 注意：**不要把邮箱和 GitHub 再抄一遍放这里** —— 它们有上面的专用字段，
+   * 重复放会让关于页出现两遍（这个文件以前就是这样，导致上面两个字段形同虚设）。
+   */
   socials: [
-    { label: '邮箱', value: 'you@example.com' },
-    { label: 'GitHub', value: 'github.com/yourname' },
-  ],
+    // { label: '掘金', value: 'juejin.cn/user/12345' },
+    // { label: 'X', value: 'x.com/yourname' },
+  ] as Array<{ label: string, value: string }>,
 
   /** SEO 默认描述（首页、og:description） */
   description: '记录技术、阅读与生活的个人博客，基于 Nuxt 4 + Nuxt Content 构建的桌面 OS 风格站点。',

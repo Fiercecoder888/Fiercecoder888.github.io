@@ -57,6 +57,16 @@ export const APPS: AppDef[] = [
     inDock: true,
   },
   {
+    // 无限进步 = 工作日志的聚合视图（时间轴 / 坑库 / 统计）
+    // 图标复用已有的 calendar（app-icons 里没有趋势/图表类的图），语义上对应「按天记录」
+    id: 'progress',
+    name: '无限进步',
+    icon: '/app-icons/calendar/128.png',
+    kind: 'route',
+    to: '/progress',
+    inDock: true,
+  },
+  {
     id: 'terminal',
     name: '终端',
     icon: '/app-icons/terminal/128.png',

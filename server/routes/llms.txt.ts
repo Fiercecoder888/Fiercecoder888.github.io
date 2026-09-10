@@ -10,6 +10,10 @@ export default defineEventHandler(async (event) => {
     .where('draft', '=', false)
     .order('date', 'DESC')
     .all()
+  const worklogs = await queryCollection(event, 'worklog')
+    .where('draft', '=', false)
+    .order('date', 'DESC')
+    .all()
 
   const lines = [
     `# ${SITE.name}`,
@@ -20,6 +24,7 @@ export default defineEventHandler(async (event) => {
     '',
     `- 首页：${site}/`,
     `- 文章归档：${site}/blog`,
+    `- 工作日志：${site}/worklog`,
     `- 标签：${site}/tags`,
     `- 关于：${site}/about`,
     `- RSS：${site}/rss.xml`,
@@ -28,6 +33,10 @@ export default defineEventHandler(async (event) => {
     '## 文章',
     '',
     ...posts.map(post => `- [${post.title}](${site}${post.path}): ${post.description ?? ''}`),
+    '',
+    '## 工作日志',
+    '',
+    ...worklogs.map(log => `- [${log.title}](${site}${log.path}): ${log.summary ?? ''}`),
     '',
   ]
 

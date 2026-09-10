@@ -432,18 +432,25 @@ body {
   color: #ef4444;
 }
 .prose-article pre {
-  background: #21252b;
+  /* 浅色主题**必须**配浅底。
+     shiki 在浅色模式下给每个 token 打的是 GitHub **Light** 调色板的内联样式
+     （token 颜色是 #24292E 这类深色），内联样式优先级高于这里的规则；
+     而这里以前写死深底 #21252b —— 于是深色 token 画在深底上，实测对比度约 1.05:1，
+     代码块基本看不见（默认外观就是浅色，所以这是读者第一眼就撞上的问题）。
+     深色主题的深底在下面 `.dark .prose-article pre` 里单独设，不要挪回这里。 */
+  background: #f6f8fa;
+  border: 1px solid #e5e7eb;
   border-radius: 0.75rem;
   padding: 1rem 1.15rem;
   overflow-x: auto;
   font-size: 0.9em;
   line-height: 1.7;
-  color: #abb2bf;
+  color: #24292e;
 }
 .prose-article pre code {
   background: transparent;
   padding: 0;
-  color: #abb2bf;
+  color: #24292e;
 }
 .prose-article blockquote {
   border-left: 3px solid #93c5fd;

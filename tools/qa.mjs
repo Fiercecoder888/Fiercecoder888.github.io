@@ -14,6 +14,7 @@
 import { spawn } from 'node:child_process'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { inflateSync } from 'node:zlib'
+import { resolveChromeOrExit } from './chrome-path.mjs'
 
 const argv = process.argv.slice(2)
 const arg = (name, fallback) => {
@@ -26,8 +27,7 @@ const WANT_DARK = argv.includes('--dark')
 const PORT = Number(arg('--port', WANT_DARK ? '9341' : '9340'))
 const WIN_W = Number(arg('--width', '1440'))
 const WIN_H = Number(arg('--height', '900'))
-const CHROME = process.env.CHROME_PATH
-  || 'C:\\Users\\USER\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1228\\chrome-headless-shell-win64\\chrome-headless-shell.exe'
+const CHROME = resolveChromeOrExit()
 
 const issues = []
 const notes = []
@@ -328,6 +328,13 @@ async function main() {
       for (const [name, sel] of list) {
         const el = document.querySelector(sel)
         if (!el) { out.push({ name, status: 'missing' }); continue }
+        // 先把它滚进视野再测。
+        // 窄屏（390px）下 Dock 是横向可滚的：实测 Dock 宽 374px 而 scrollWidth 700px，
+        // 排在后面的图标一开始就在视口外，elementFromPoint 返回 null ——
+        // 那是「没滚到」而不是「被盖住」。本检查的本意是查「有没有东西盖住控件」，
+        // 所以必须先滚再测，否则会把一个可滚动的 Dock 误报成 covered。
+        // （不是放水：滚进来之后若仍被别的层盖住，依然照常报 covered。）
+        el.scrollIntoView({ block: 'nearest', inline: 'center' })
         const r = el.getBoundingClientRect()
         if (r.width < 2 || r.height < 2) { out.push({ name, status: 'zero-size' }); continue }
         const x = r.left + r.width / 2

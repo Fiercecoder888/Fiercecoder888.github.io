@@ -10,3 +10,11 @@ dist
 preview
 build.log
 *.log
+
+# 草稿目录本身是一个**独立的私有仓库**（remote: Fiercecoder888/my-blog-drafts，
+# 目录内自带 .git）。所以整个目录都不进本仓库 —— 有两个原因：
+#   1) 本仓库是 public：草稿提交上来虽然不上网站，但任何人 clone 或读 raw 文件就能看到原文
+#   2) 目录里有 .git，若被本仓库扫描到会被当成「嵌套仓库」，git add 会把 drafts/ 误提交成
+#      一个 gitlink（子模块引用），而那个引用在克隆本仓库的人是拉不到的 —— 直接忽略最干净
+# 草稿的工作流见 docs/工作日志.md；改动草稿后请**在 drafts/ 目录里**单独 commit + push。
+drafts/

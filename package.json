@@ -12,6 +12,8 @@
     "e2e:static": "node tools/e2e-desktop.mjs --base http://127.0.0.1:4180",
     "qa:static": "node tools/qa.mjs --base http://127.0.0.1:4180",
     "assets:check": "node tools/asset-check.mjs",
+    "check:drafts": "node scripts/check-drafts.mjs",
+    "new:log": "node scripts/new-log.mjs",
     "postinstall": "node scripts/install-sqlite-prebuild.mjs && nuxt prepare"
   },
   "dependencies": {

@@ -9,6 +9,10 @@ export default defineEventHandler(async (event) => {
     .limit(20)
     .all()
 
+  // 刻意只包含 blog 集合，**不包含 worklog**（工作日志）：RSS 是给订阅者推送更新的，
+  // 一天一条的工作日志会把订阅列表刷屏，订阅者很快就会退订。这是决定，不是漏掉了。
+  // 工作日志仍然进 sitemap.xml 与 llms.txt，供搜索引擎 / AI 代理收录。
+
   const items = posts.map(post => `    <item>
       <title><![CDATA[${post.title}]]></title>
       <description><![CDATA[${post.description ?? ''}]]></description>

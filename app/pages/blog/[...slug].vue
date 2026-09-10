@@ -79,6 +79,8 @@
 </template>
 
 <script setup lang="ts">
+import { SITE } from '#shared/site'
+
 const route = useRoute()
 
 // route.path 是 URL 编码后的（中文 slug 会被编码），Content 里存的是解码后的 path，这里统一解码。
@@ -150,7 +152,10 @@ useHead({
         headline: post.value?.title,
         description: post.value?.description,
         datePublished: post.value?.date,
-        author: { '@type': 'Person', name: '站长' },
+        // 作者从 shared/site.ts 读，不要写死字面量：
+        // 写死会与 <meta name="author">（同样读 SITE.author）不一致，
+        // 出现「一个页面两个作者名」，而且用户换个人信息时改不到这里。
+        author: { '@type': 'Person', name: SITE.author },
       }),
     },
   ],

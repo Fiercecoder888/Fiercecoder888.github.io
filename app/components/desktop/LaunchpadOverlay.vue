@@ -78,6 +78,7 @@ const apps = [
   { key: 'blog', kind: 'route' as const, to: '/blog', label: '文章列表', src: '/app-icons/safari/128.png' },
   { key: 'tags', kind: 'route' as const, to: '/tags', label: '标签', src: '/app-icons/notes/128.png' },
   { key: 'about-page', kind: 'route' as const, to: '/about', label: '关于我', src: '/app-icons/contacts/128.png' },
+  { key: 'progress', kind: 'route' as const, to: '/progress', label: '无限进步', src: '/app-icons/calendar/128.png' },
   { key: 'terminal', kind: 'window' as const, label: '终端', src: '/app-icons/terminal/128.png' },
   { key: 'settings', kind: 'window' as const, label: '系统设置', src: '/app-icons/system-preferences/128.png' },
   { key: 'wallpaper', kind: 'window' as const, label: '壁纸', src: '/app-icons/wallpapers/128.png' },

@@ -10,6 +10,8 @@
  *
  * 退出码：0 全部通过（未实现的功能记为 pending，不算失败）；1 有硬失败。
  */
+import { readFileSync } from 'node:fs'
+
 const argv = process.argv.slice(2)
 
 function arg(name, fallback) {
@@ -20,6 +22,33 @@ function arg(name, fallback) {
 const BASE = String(arg('--base', process.env.BLOG_BASE || 'http://localhost:3123')).replace(/\/$/, '')
 const SKIP_COMMENTS = argv.includes('--skip-comments')
 const AS_JSON = argv.includes('--json')
+
+/**
+ * 站点名「唯一的真相」在 shared/site.ts 的 SITE.name —— 这里读它，而不是写死字面量。
+ * 否则用户一改站名，/llms.txt 的断言就会假红，让人误以为改坏了东西。
+ *
+ * 为什么是「读文件 + 正则」而不是 import / 构建：
+ *   shared/site.ts 是 TypeScript，tools/ 下是纯 .mjs，node 原生 import 不了 .ts；
+ *   为了拿一个字符串去加依赖或加构建步骤，代价远大于收益。
+ *   SITE 是纯字面量对象、name 又是它的第一个属性，所以「从 `export const SITE` 之后
+ *   取第一个行首的 `name: '...'`」既简单又稳：行首锚点保证了文档注释里的
+ *   `name:` 之类字样不会被误匹配，`'` / `"` / 反引号三种引号都支持，
+ *   值里的转义引号（`'It\'s'`）也能正确读到结尾。
+ * 解析失败时大声报错并退出，而不是悄悄退回旧字面量 —— 那样只会制造更难查的假红。
+ */
+function readSiteName() {
+  const source = readFileSync(new URL('../shared/site.ts', import.meta.url), 'utf8')
+  const from = source.indexOf('export const SITE')
+  const match = from === -1 ? null : source.slice(from).match(/^[ \t]*name[ \t]*:[ \t]*(['"`])((?:\\.|(?!\1)[\s\S])*)\1/m)
+  const name = match && match[2].trim()
+  if (!name) {
+    console.error('✘ 无法从 shared/site.ts 解析出 SITE.name —— 请检查 SITE 对象的 name 字段写法。')
+    process.exit(1)
+  }
+  return name.replace(/\\(['"`])/g, '$1')
+}
+
+const SITE_NAME = readSiteName()
 
 const results = []
 const record = (group, name, status, detail = '') => results.push({ group, name, status, detail })
@@ -43,7 +72,7 @@ async function checkPages() {
     ['/about', '关于我'],
     ['/sitemap.xml', '<urlset'],
     ['/rss.xml', '<rss'],
-    ['/llms.txt', '# 我的博客'],
+    ['/llms.txt', `# ${SITE_NAME}`], // 站名读自 shared/site.ts，改站名不会假红
     ['/robots.txt', 'GPTBot'],
   ]
 
@@ -237,6 +266,7 @@ async function main() {
   }
   else {
     const icon = { pass: '✔', fail: '✘', pending: '…' }
+    console.log(`站点名（读自 shared/site.ts 的 SITE.name）：${SITE_NAME}`)
     let group = ''
     for (const r of results) {
       if (r.group !== group) { group = r.group; console.log(`\n【${group}】`) }

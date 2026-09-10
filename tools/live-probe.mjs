@@ -12,7 +12,7 @@
  *   node --use-system-ca tools/live-probe.mjs https://example.github.io/blog/hello-blog/
  */
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { resolveChromeOrExit } from './chrome-path.mjs'
 
 const argv = process.argv.slice(2)
 const arg = (name, fallback) => {
@@ -27,16 +27,8 @@ if (!URL_) {
 const TIMEOUT = Number(arg('timeout', '60000'))
 const PORT = Number(arg('port', '9441'))
 
-const CANDIDATES = [
-  process.env.LOCALAPPDATA && `${process.env.LOCALAPPDATA}\\ms-playwright\\chromium_headless_shell-1228\\chrome-headless-shell-win64\\chrome-headless-shell.exe`,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-].filter(Boolean)
-const CHROME = CANDIDATES.find((p) => existsSync(p))
-if (!CHROME) {
-  console.error('找不到可用的 Chrome/chromium-headless-shell')
-  process.exit(1)
-}
+// Chrome 路径解析统一走 tools/chrome-path.mjs（原先这里抄了一份 candidates，会漂移）
+const CHROME = resolveChromeOrExit()
 
 const chrome = spawn(CHROME, [
   '--headless=new',

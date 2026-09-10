@@ -8,6 +8,7 @@
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { resolveChromeOrExit } from './chrome-path.mjs'
 
 const argv = process.argv.slice(2)
 const arg = (name, fallback) => {
@@ -17,8 +18,7 @@ const arg = (name, fallback) => {
 
 const BASE = String(arg('--base', 'http://localhost:3123')).replace(/\/$/, '')
 const PORT = Number(arg('--port', '9335'))
-const CHROME = process.env.CHROME_PATH
-  || 'C:\\Users\\USER\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1228\\chrome-headless-shell-win64\\chrome-headless-shell.exe'
+const CHROME = resolveChromeOrExit()
 
 const SHOTS = [
   { name: 'home', path: '/' },

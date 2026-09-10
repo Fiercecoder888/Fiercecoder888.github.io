@@ -298,6 +298,7 @@ const menus = computed<Record<string, MenuItem[]>>(() => ({
     { label: '文章列表', action: () => navigate('/blog') },
     { label: '标签', action: () => navigate('/tags') },
     { label: '关于我', action: () => navigate('/about') },
+    { label: '无限进步', icon: 'chart', action: () => navigate('/progress') },
     { label: '分隔' },
     { label: 'RSS 订阅', action: () => openExternal('/rss.xml') },
     { label: 'Sitemap', action: () => openExternal('/sitemap.xml') },

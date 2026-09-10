@@ -62,7 +62,7 @@ const ui = useUiStore()
 // 首页 = 桌面；其余页面装进白色 mac 窗口
 const isDesktop = computed(() => route.path === '/')
 // 文章详情页用 Safari 风格窗口壳（带地址栏与前进后退）
-const isArticle = computed(() => route.path.startsWith('/blog/'))
+const isArticle = computed(() => route.path.startsWith('/blog/') || route.path.startsWith('/worklog/'))
 
 // 清空桌面（纯净桌面）时，页面内容整体隐藏，只剩壁纸 + 菜单栏 + Dock + 窗口
 // 切换路由自动恢复显示，避免点 Dock 后什么都看不到

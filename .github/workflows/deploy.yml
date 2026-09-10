@@ -47,6 +47,11 @@ jobs:
         id: site
         run: echo "url=https://$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]').github.io" >> "$GITHUB_OUTPUT"
 
+      # 草稿守卫：@nuxt/content 构建期不按 draft 字段过滤数据库行，draft: true 的正文
+      # 会随公开可下载的 /_nuxt_content/blog/sql_dump.txt 一起泄露。构建前先拦住。
+      - name: Check no drafts in content
+        run: pnpm check:drafts
+
       - name: Generate static site
         run: pnpm generate
         env:

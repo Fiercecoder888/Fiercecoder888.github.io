@@ -34,6 +34,8 @@ export default defineNuxtConfig({
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'author', content: SITE.author },
+        // keywords 这个字段以前全站没人引用（填了不生效），现在接到这里
+        ...(SITE.keywords.length ? [{ name: 'keywords', content: SITE.keywords.join(', ') }] : []),
       ],
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
@@ -56,10 +58,19 @@ export default defineNuxtConfig({
     },
   },
 
-  // 静态生成时把 SEO 路由一起预渲染
+  // 静态生成时把 SEO 路由和「没有页面内锚点指向」的页面一起预渲染。
+  //
+  // 为什么必须显式列出来：`nuxt generate` 只预渲染这里的 routes + **从首页爬 `<a href>`** 发现的页面。
+  // 而桌面上的 Dock、顶栏菜单、Launchpad 全是 `<button>`（`DockItem.vue` 只对 `kind:'link'` 渲染 `<a>`），
+  // 首页上没有任何指向 /progress、/worklog 的锚点 —— 不写在这里，它们在静态托管上就是 404。
+  // 子页面（/worklog/<日期>、/progress/pitfalls 等）由这些页面里的 `<a>` 链到，会被自动爬取。
   nitro: {
     prerender: {
-      routes: ['/', '/about', '/blog', '/tags', '/rss.xml', '/sitemap.xml', '/llms.txt', '/robots.txt'],
+      routes: [
+        '/', '/about', '/blog', '/tags',
+        '/worklog', '/progress', '/progress/pitfalls', '/progress/stats',
+        '/rss.xml', '/sitemap.xml', '/llms.txt', '/robots.txt',
+      ],
     },
   },
 
