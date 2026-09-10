@@ -34,7 +34,7 @@ export const SITE = {
   /** 首页 SEO 标题用的关键词 */
   keywords: ['前端', '全栈', 'Nuxt', 'Vue', '博客'],
   /** 部署后换成真实域名（sitemap / RSS 里的绝对地址） */
-  url: 'https://fiercecoder.github.io',
+  url: 'https://fiercecoder888.github.io',
 } as const
 
 export type Site = typeof SITE
