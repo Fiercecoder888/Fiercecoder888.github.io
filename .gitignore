@@ -11,6 +11,12 @@ preview
 build.log
 *.log
 
+# 临时验证产物：验收脚本的输出文件与探针脚本习惯用点开头的名字，
+# 它们不该进版本库（曾经因为 `git add -A` 把 .r1.txt 这类文件提交进去过）
+.*.txt
+.probe-*.mjs
+.tmp-*.mjs
+
 # 草稿目录本身是一个**独立的私有仓库**（remote: Fiercecoder888/my-blog-drafts，
 # 目录内自带 .git）。所以整个目录都不进本仓库 —— 有两个原因：
 #   1) 本仓库是 public：草稿提交上来虽然不上网站，但任何人 clone 或读 raw 文件就能看到原文
