@@ -74,12 +74,18 @@ async function checkPages() {
   }
 
   // 404
+  // 注意：`nuxt generate` 产出的 404.html 是「客户端渲染」的外壳（和 200.html 同一份模板），
+  // 所以正文里不会有「页面走丢了」——那段文案是浏览器里跑完 Nuxt 才有的。
+  // 因此这一层只断言 HTTP 语义（状态码 404 + 服务的是我们自己的 404 页而不是主机默认页），
+  // 渲染后的文案由 tools/e2e-desktop.mjs 的浏览器用例负责。
   try {
     const { status, text } = await req('/__verify_not_exist__')
-    record('404', '不存在路径', status === 404 && text.includes('页面走丢了') ? 'pass' : 'fail', `HTTP ${status}`)
+    const isOurShell = text.includes('id="__nuxt"') || text.includes('页面走丢了')
+    record('404', '不存在路径返回 404', status === 404 ? 'pass' : 'fail', `HTTP ${status}`)
+    record('404', '服务自己的 404 页', isOurShell ? 'pass' : 'fail', isOurShell ? `${text.length} bytes` : '拿到的是主机默认 404 页')
   }
   catch (error) {
-    record('404', '不存在路径', 'fail', error.message)
+    record('404', '不存在路径返回 404', 'fail', error.message)
   }
 
   // SEO 内容体检

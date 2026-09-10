@@ -643,6 +643,22 @@ async function main() {
   const relevant = consoleErrors.filter(t => !/favicon|DevTools|vite|__verify_not_exist__/i.test(t))
   record('无 JS 异常', relevant.length === 0, relevant.slice(0, 3).join(' || '))
 
+  /* ---------- 9. 404 页（浏览器渲染后） ---------- */
+  // 必须放在「无 JS 异常」之后：访问不存在的路径本来就会产生 404 网络日志和
+  // Nuxt 的错误输出，那是预期行为，不该算成 JS 异常。
+  //
+  // 为什么这条只能在浏览器里验：nuxt generate 产出的 404.html 是客户端渲染的壳
+  // （和 200.html 同一份模板），HTTP 层拿到的正文里没有文案。
+  // HTTP 语义（状态码 404 + 服务的是自家 404 页）由 tools/verify.mjs 负责。
+  await send('Page.navigate', { url: `${BASE}/__verify_not_exist__` })
+  const notFoundRendered = await waitFor(
+    async () => (await evaluate(`document.body.innerText.includes('页面走丢了')`)) === true,
+    15000,
+    300,
+  )
+  const notFoundText = notFoundRendered ? await text('body') : ''
+  record('404 页渲染「页面走丢了」', notFoundRendered, notFoundText.replace(/\s+/g, ' ').slice(0, 60))
+
   console.log('')
   for (const item of results) {
     console.log(`  ${item.ok ? '✔' : '✘'} ${item.name}${item.detail ? ` — ${item.detail}` : ''}`)

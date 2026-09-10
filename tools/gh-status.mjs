@@ -73,12 +73,17 @@ if (pages.status === 200) {
 }
 
 // ── 最近的工作流运行 ──────────────────────────────────────────
-const runs = await api(`/repos/${repo}/actions/runs?per_page=5`)
+const runIdx = process.argv.indexOf('--run')
+const wantRunId = runIdx !== -1 ? process.argv[runIdx + 1] : null
+const runs = await api(
+  wantRunId ? `/repos/${repo}/actions/runs/${wantRunId}` : `/repos/${repo}/actions/runs?per_page=5`,
+)
 if (runs.status !== 200) {
   line(`Actions : 读取失败 HTTP ${runs.status} ${runs.body?.message || ''}`)
 } else {
-  const list = runs.body.workflow_runs || []
-  line(`Actions : 共 ${runs.body.total_count} 次运行，最近 ${list.length} 次`)
+  const list = wantRunId ? [runs.body] : runs.body.workflow_runs || []
+  if (!wantRunId) line(`Actions : 共 ${runs.body.total_count} 次运行，最近 ${list.length} 次`)
+  else line(`Actions : 指定 run ${wantRunId}`)
   for (const r of list) {
     const dur = r.run_started_at && r.updated_at
       ? Math.round((new Date(r.updated_at) - new Date(r.run_started_at)) / 1000) + 's'

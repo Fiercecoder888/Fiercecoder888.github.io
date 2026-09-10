@@ -39,12 +39,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      # 用户站地址固定是 https://<账号>.github.io，仓库名必须也叫 <账号>.github.io。
+      # 必须转小写：GitHub 账号名可能带大写（如 Fiercecoder888），但主机名一律小写，
+      # 否则 canonical / sitemap / RSS 会写成 https://Fiercecoder888.github.io，
+      # 与 shared/site.ts 不一致，SEO 上会被当成两个 URL。
+      - name: Resolve site url
+        id: site
+        run: echo "url=https://$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]').github.io" >> "$GITHUB_OUTPUT"
+
       - name: Generate static site
         run: pnpm generate
         env:
-          # 用户站的地址固定是 https://<账号>.github.io（仓库名必须也叫 <账号>.github.io）
           # sitemap / RSS / llms.txt / canonical 都用它
-          NUXT_PUBLIC_SITE_URL: https://${{ github.repository_owner }}.github.io
+          NUXT_PUBLIC_SITE_URL: ${{ steps.site.outputs.url }}
 
       # GitHub Pages 默认跑 Jekyll，会忽略 _nuxt/ 这类下划线开头的目录
       - name: Disable Jekyll
@@ -55,7 +62,7 @@ jobs:
           echo "产物大小: $(du -sh .output/public | cut -f1)"
           echo "文件数  : $(find .output/public -type f | wc -l)"
           echo "HTML 数 : $(find .output/public -name '*.html' | wc -l)"
-          echo "站点地址: https://${{ github.repository_owner }}.github.io"
+          echo "站点地址: ${{ steps.site.outputs.url }}"
 
       - uses: actions/upload-pages-artifact@v3
         with:

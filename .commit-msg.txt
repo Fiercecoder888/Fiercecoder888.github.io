@@ -1,0 +1,12 @@
+fix(ci): 站点地址转小写，补静态托管验收工具
+
+- workflow: NUXT_PUBLIC_SITE_URL 由 github.repository_owner 推导时没转小写，
+  产出 https://Fiercecoder888.github.io，与 shared/site.ts 不一致（SEO 会当成两个 URL）。
+  改为在 shell 里 tr 转小写后再喂给 generate。
+- tools/serve-static.mjs: 本地复刻 GitHub Pages 语义的静态服务器（含 404.html 与 .wasm MIME），
+  让验收跑在静态产物上而不是 dev server。这是发现「dev 通过、线上失败」的唯一办法。
+- tools/asset-check.mjs: 校验页面引用的所有本地资源都能取到（防 chunk 404 静默失效）。
+- tools/gh-status.mjs / gh-deploy-watch.mjs: 查仓库/Pages/Actions 状态、失败原因 annotation，
+  以及「等部署完成 + 探测线上」。
+- verify/e2e: 404 检查拆成 HTTP 层（状态码 + 自家 404 页）和浏览器层（渲染出文案）。
+  nuxt generate 的 404.html 是客户端渲染的壳，过去那条断言在静态托管上必然误报。
