@@ -1,0 +1,63 @@
+name: Deploy to GitHub Pages
+
+# 推到 main 就自动构建 + 发布到 GitHub Pages（免费域名）
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # 让 GitHub 读出 Pages 的地址（用户站是 https://<user>.github.io）
+      - uses: actions/configure-pages@v5
+        id: pages
+
+      # postinstall 会用 scripts/install-sqlite-prebuild.mjs 补 better-sqlite3 预编译包
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Generate static site
+        run: pnpm generate
+        env:
+          # sitemap / RSS / llms.txt 里的绝对地址
+          NUXT_PUBLIC_SITE_URL: ${{ steps.pages.outputs.base_url }}
+
+      # GitHub Pages 默认跑 Jekyll，会忽略 _nuxt/ 这类下划线开头的目录
+      - name: Disable Jekyll
+        run: touch .output/public/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .output/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

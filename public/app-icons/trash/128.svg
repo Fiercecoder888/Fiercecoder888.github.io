@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="canBody" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7c7c81"/>
+      <stop offset="0.16" stop-color="#dcdce1"/>
+      <stop offset="0.46" stop-color="#f8f8fb"/>
+      <stop offset="0.78" stop-color="#cfcfd4"/>
+      <stop offset="1" stop-color="#82828a"/>
+    </linearGradient>
+    <linearGradient id="canLid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fdfdfe"/>
+      <stop offset="0.55" stop-color="#e3e3e8"/>
+      <stop offset="1" stop-color="#b9b9c0"/>
+    </linearGradient>
+    <linearGradient id="canRim" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9a9aa1"/>
+      <stop offset="0.5" stop-color="#f2f2f6"/>
+      <stop offset="1" stop-color="#9a9aa1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 桶身 -->
+  <path d="M33 40 L41.5 106 Q64 113 86.5 106 L95 40 Z" fill="url(#canBody)" opacity="0.96"/>
+  <!-- 桶身竖纹 -->
+  <g stroke="#9c9ca3" stroke-width="1.6" opacity="0.5" fill="none">
+    <path d="M47 48 L50 103"/>
+    <path d="M59 48 L60 106"/>
+    <path d="M69 48 L68 106"/>
+    <path d="M81 48 L78 103"/>
+  </g>
+  <!-- 桶口收边 -->
+  <path d="M33 40 L95 40 L93.5 46 L34.5 46 Z" fill="url(#canRim)"/>
+  <!-- 盖子 -->
+  <ellipse cx="64" cy="33" rx="35" ry="8.5" fill="url(#canLid)"/>
+  <ellipse cx="64" cy="33" rx="35" ry="8.5" fill="none" stroke="#8e8e93" stroke-width="1" opacity="0.55"/>
+  <!-- 提手 -->
+  <path d="M52 25 q12 -8 24 0" fill="none" stroke="#b0b0b8" stroke-width="2.4" stroke-linecap="round"/>
+  <!-- 高光 -->
+  <path d="M40 44 L46 100" stroke="#ffffff" stroke-width="3" opacity="0.45" fill="none"/>
+</svg>

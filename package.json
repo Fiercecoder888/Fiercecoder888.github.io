@@ -1,0 +1,36 @@
+{
+  "name": "my-blog",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "node scripts/install-sqlite-prebuild.mjs && nuxt prepare"
+  },
+  "dependencies": {
+    "@nuxt/content": "^3.6.0",
+    "@pinia/nuxt": "^1.0.2",
+    "nuxt": "^4.0.0",
+    "pinia": "^4.0.3",
+    "vue": "^3.5.0",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.130",
+    "@iconify-json/mdi": "^1.2.3",
+    "@iconify-json/ph": "^1.2.2",
+    "@iconify-json/simple-icons": "^1.2.95",
+    "@nuxt/icon": "^2.5.1",
+    "@tailwindcss/vite": "^4.1.0",
+    "better-sqlite3": "^12.2.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.6.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

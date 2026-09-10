@@ -1,0 +1,652 @@
+@import "tailwindcss";
+
+/* Tailwind v4：让 dark: 变体跟随我们自己的 .dark 类（而不是系统偏好） */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============ macOS 系统设计令牌（取值照搬 macos-web 的 theme.css） ============ */
+:root {
+  --system-color-primary: hsl(211, 100%, 50%);
+  --system-color-primary-hsl: 211, 100%, 50%;
+  --system-color-dark: hsl(240, 3%, 11%);
+  --system-color-dark-hsl: 240, 3%, 11%;
+  --system-color-dark-contrast: hsl(240, 24%, 100%);
+  --system-color-light: hsl(240, 24%, 100%);
+  --system-color-light-hsl: 240, 24%, 100%;
+  --system-color-light-contrast: hsl(0, 0%, 11%);
+  --system-color-grey-100-hsl: 0, 0%, 96%;
+  --system-color-grey-200: #eeeeee;
+  --system-color-grey-500: #9e9e9e;
+  --system-color-grey-900-hsl: 0, 0%, 13%;
+
+  --system-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+
+  /* 菜单栏/Dock（浅色模式 = 半透明白，深色模式 = 半透明黑）
+     注意：壁纸可能是深色的，所以浅色模式的白色底要足够不透明，否则深色文字读不出来 */
+  --menubar-bg: hsla(var(--system-color-light-hsl), 0.62);
+  --menubar-fg: var(--system-color-light-contrast);
+  --dock-bg: hsla(var(--system-color-light-hsl), 0.55);
+  --dock-divider: hsla(var(--system-color-dark-hsl), 0.3);
+  --window-bg: #ffffff;
+  --window-titlebar: rgba(246, 246, 246, 0.85);
+  --window-fg: hsl(0, 0%, 11%);
+  --window-border: rgba(0, 0, 0, 0.12);
+  --menubar-h: 1.8rem;
+}
+
+.dark {
+  --menubar-bg: hsla(var(--system-color-dark-hsl), 0.55);
+  --menubar-fg: var(--system-color-dark-contrast);
+  --dock-bg: hsla(var(--system-color-dark-hsl), 0.5);
+  --dock-divider: hsla(var(--system-color-light-hsl), 0.3);
+  --window-bg: #242427;
+  --window-titlebar: rgba(58, 58, 62, 0.85);
+  --window-fg: hsl(0, 0%, 92%);
+  --window-border: rgba(255, 255, 255, 0.14);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-family: var(--system-font-family);
+}
+
+/* macOS 菜单栏 */
+.mac-menubar {
+  background-color: var(--menubar-bg);
+  color: var(--menubar-fg);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  font-family: var(--system-font-family);
+  text-shadow: 0 0 1px hsla(0, 0%, 0%, 0.1);
+}
+.mac-menubar-item {
+  font-weight: 500;
+  font-size: 0.8rem;
+  letter-spacing: 0.3px;
+  border-radius: 0.25rem;
+  padding: 0 0.5rem;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  cursor: default;
+}
+.mac-menubar-item:hover,
+.mac-menubar-item[data-active='true'] {
+  background-color: hsla(var(--system-color-dark-hsl), 0.2);
+}
+.dark .mac-menubar-item:hover,
+.dark .mac-menubar-item[data-active='true'] {
+  background-color: hsla(var(--system-color-light-hsl), 0.22);
+}
+
+/* macOS 下拉菜单 */
+.mac-menu {
+  background-color: hsla(var(--system-color-light-hsl), 0.75);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 0.5px solid rgba(0, 0, 0, 0.12);
+  border-radius: 0.4rem;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.28);
+  padding: 0.25rem;
+  color: var(--system-color-light-contrast);
+  font-size: 0.8rem;
+}
+.dark .mac-menu {
+  background-color: hsla(var(--system-color-dark-hsl), 0.8);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--system-color-dark-contrast);
+}
+.mac-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.mac-menu-item:hover:not(:disabled) {
+  background-color: var(--system-color-primary);
+  color: #fff;
+}
+.mac-menu-item:disabled {
+  opacity: 0.4;
+}
+.mac-menu-sep {
+  height: 1px;
+  margin: 0.25rem 0.5rem;
+  background-color: rgba(0, 0, 0, 0.12);
+}
+.dark .mac-menu-sep {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+/* macOS 窗口 */
+.mac-window {
+  background-color: var(--window-bg);
+  color: var(--window-fg);
+  border: 0.5px solid var(--window-border);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.mac-titlebar {
+  background-color: var(--window-titlebar);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ============ 深色模式下把「纸张式」浅色工具类重映射 ============
+   页面组件是按浅色纸张写的，这里集中重映射，避免逐页加 dark: 变体 */
+.dark .mac-window .text-gray-900,
+.dark .mac-window .text-gray-800 { color: #f3f4f6; }
+.dark .mac-window .text-gray-700 { color: #e5e7eb; }
+.dark .mac-window .text-gray-600 { color: #d1d5db; }
+.dark .mac-window .text-gray-500 { color: #9ca3af; }
+.dark .mac-window .text-gray-400 { color: #6b7280; }
+
+.dark .mac-window .bg-white { background-color: rgba(255, 255, 255, 0.05); }
+.dark .mac-window .bg-gray-50 { background-color: rgba(255, 255, 255, 0.04); }
+.dark .mac-window .bg-gray-100 { background-color: rgba(255, 255, 255, 0.08); }
+.dark .mac-window .bg-blue-50 { background-color: rgba(59, 130, 246, 0.14); }
+.dark .mac-window .bg-rose-50 { background-color: rgba(244, 63, 94, 0.14); }
+
+.dark .mac-window .text-blue-800 { color: #a5c8ff; }
+.dark .mac-window .text-blue-600,
+.dark .mac-window .text-blue-700 { color: #7ea6ff; }
+.dark .mac-window .text-rose-500,
+.dark .mac-window .text-rose-600,
+.dark .mac-window .text-rose-700 { color: #fda4af; }
+.dark .mac-window .text-emerald-600 { color: #6ee7b7; }
+
+.dark .mac-window .border-gray-200 { border-color: rgba(255, 255, 255, 0.12); }
+.dark .mac-window .border-gray-300 { border-color: rgba(255, 255, 255, 0.18); }
+.dark .mac-window .border-rose-200,
+.dark .mac-window .border-rose-300 { border-color: rgba(244, 63, 94, 0.35); }
+.dark .mac-window .border-blue-300 { border-color: rgba(126, 166, 255, 0.5); }
+
+.dark .mac-window .hover\:border-gray-300:hover { border-color: rgba(255, 255, 255, 0.22); }
+.dark .mac-window .hover\:shadow-md:hover,
+.dark .mac-window .hover\:shadow-sm:hover { box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45); }
+.dark .mac-window input::placeholder,
+.dark .mac-window textarea::placeholder { color: #6b7280; }
+
+/* macOS Dock */.mac-dock {
+  background-color: var(--dock-bg);
+  border-radius: 1.2rem;
+  box-shadow:
+    inset 0 0 0 0.2px hsla(var(--system-color-grey-100-hsl), 0.7),
+    0 0 0 0.2px hsla(var(--system-color-grey-900-hsl), 0.7),
+    hsla(0, 0%, 0%, 0.3) 2px 5px 19px 7px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.mac-dock-divider {
+  width: 0.2px;
+  height: 100%;
+  margin: 0 4px;
+  background-color: var(--dock-divider);
+}
+
+/* ============================================================
+   以下为项目原有的桌面/文章排版样式
+   ============================================================ */
+
+/* —— 桌面壁纸 —— */
+.desktop-wallpaper {
+  background-color: #0a0f1e;
+  background-image:
+    radial-gradient(120% 95% at 12% 6%, rgba(88, 101, 242, 0.45), transparent 58%),
+    radial-gradient(95% 80% at 88% 12%, rgba(236, 72, 153, 0.32), transparent 60%),
+    radial-gradient(130% 95% at 50% 104%, rgba(56, 189, 248, 0.30), transparent 62%),
+    linear-gradient(158deg, #0a0f1e 0%, #141b36 46%, #1c1533 100%);
+}
+
+/* 文章正文排版（不引入 typography 插件，保持依赖最少） */
+.prose-blog {
+  color: #cbd5e1;
+  font-size: 1.0625rem;
+  line-height: 1.85;
+}
+.prose-blog > * + * {
+  margin-top: 1.15em;
+}
+.prose-blog h2 {
+  color: #f1f5f9;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 2.2em;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+.prose-blog h3 {
+  color: #e2e8f0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 1.8em;
+}
+.prose-blog a {
+  color: #7ea6ff;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(126, 166, 255, 0.35);
+}
+.prose-blog a:hover {
+  border-bottom-color: #7ea6ff;
+}
+.prose-blog strong {
+  color: #f8fafc;
+}
+.prose-blog ul,
+.prose-blog ol {
+  padding-left: 1.35em;
+}
+.prose-blog ul {
+  list-style: disc;
+}
+.prose-blog ol {
+  list-style: decimal;
+}
+.prose-blog li + li {
+  margin-top: 0.35em;
+}
+.prose-blog code {
+  background: rgba(148, 163, 184, 0.14);
+  border-radius: 0.3em;
+  padding: 0.15em 0.4em;
+  font-size: 0.9em;
+  color: #ffb4a2;
+}
+.prose-blog pre {
+  background: #11151f;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 0.85rem;
+  padding: 1rem 1.15rem;
+  overflow-x: auto;
+  font-size: 0.9em;
+  line-height: 1.7;
+}
+.prose-blog pre code {
+  background: transparent;
+  padding: 0;
+  color: #cbd5e1;
+}
+.prose-blog blockquote {
+  border-left: 3px solid rgba(126, 166, 255, 0.6);
+  padding-left: 1rem;
+  color: #94a3b8;
+}
+.prose-blog img {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+.prose-blog table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.prose-blog th,
+.prose-blog td {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+}
+.prose-blog th {
+  background: rgba(148, 163, 184, 0.1);
+  color: #e2e8f0;
+}
+
+/* ============ 桌面壁纸（xiaohev 用 bg-cover 全屏图，这里用分层渐变等效） ============ */
+.desktop-wallpaper {
+  background-color: #0a0f1e;
+  background-image:
+    radial-gradient(120% 95% at 12% 6%, rgba(88, 101, 242, 0.45), transparent 58%),
+    radial-gradient(95% 80% at 88% 12%, rgba(236, 72, 153, 0.32), transparent 60%),
+    radial-gradient(130% 95% at 50% 104%, rgba(56, 189, 248, 0.30), transparent 62%),
+    linear-gradient(158deg, #0a0f1e 0%, #141b36 46%, #1c1533 100%);
+}
+
+/* ============ 桌面 widget 卡片（xiaohev 的 widget-container） ============
+   桌面壁纸亮度不可控，卡片统一用深色磨砂玻璃 + 白字，任何壁纸下都能读 */
+.widget-container {
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(10, 14, 25, 0.45);
+  padding: 1.25rem;
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.75);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.widget-container:hover {
+  border-color: rgba(255, 255, 255, 0.26);
+}
+
+/* 卡片头部的小图标块：纯色圆角（macOS 系统设置那种质感，不用渐变、不加内发光） */
+.widget-badge {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  color: #fff;
+}
+
+/* 文章条目 */
+.article-item {
+  display: block;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.75rem;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.article-item:hover {
+  transform: translateX(2px);
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* 统计小卡 */
+.stat-card {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.07);
+  padding: 0.7rem 0.75rem;
+}
+
+/* 标签胶囊 */
+.tag-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.07);
+  padding: 0.3rem 0.7rem;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+.tag-item:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ============ 文章内容（xiaohev 的文章页是浅色纸张，放在白色 mac 窗口里） ============ */
+.prose-article {
+  color: #374151;
+  font-size: 1.0625rem;
+  line-height: 1.85;
+  font-weight: 300;
+}
+.prose-article > * + * {
+  margin-top: 1.15em;
+}
+.prose-article h2 {
+  color: #1f2937;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 2em;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid #e5e7eb;
+}
+.prose-article h3 {
+  color: #1f2937;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 1.7em;
+}
+.prose-article a {
+  color: #2563eb;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(37, 99, 235, 0.35);
+}
+.prose-article a:hover {
+  border-bottom-color: #2563eb;
+}
+.prose-article strong {
+  color: #111827;
+  font-weight: 700;
+}
+.prose-article ul,
+.prose-article ol {
+  padding-left: 1.35em;
+}
+.prose-article ul {
+  list-style: disc;
+}
+.prose-article ol {
+  list-style: decimal;
+}
+.prose-article li + li {
+  margin-top: 0.35em;
+}
+.prose-article code {
+  background: #f3f4f6;
+  border-radius: 0.25em;
+  padding: 0.15em 0.4em;
+  font-size: 0.9em;
+  color: #ef4444;
+}
+.prose-article pre {
+  background: #21252b;
+  border-radius: 0.75rem;
+  padding: 1rem 1.15rem;
+  overflow-x: auto;
+  font-size: 0.9em;
+  line-height: 1.7;
+  color: #abb2bf;
+}
+.prose-article pre code {
+  background: transparent;
+  padding: 0;
+  color: #abb2bf;
+}
+.prose-article blockquote {
+  border-left: 3px solid #93c5fd;
+  background: #f8fafc;
+  padding: 0.75rem 1rem;
+  color: #4b5563;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+.prose-article img {
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+}
+.prose-article table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.prose-article th,
+.prose-article td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+}
+.prose-article th {
+  background: #f9fafb;
+  color: #1f2937;
+}
+
+/* —— 深色模式下的文章排版 —— */
+.dark .prose-article {
+  color: #d1d5db;
+}
+.dark .prose-article h2 {
+  color: #f3f4f6;
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+.dark .prose-article h3 {
+  color: #e5e7eb;
+}
+.dark .prose-article a {
+  color: #7ea6ff;
+  border-bottom-color: rgba(126, 166, 255, 0.35);
+}
+.dark .prose-article strong {
+  color: #f9fafb;
+}
+.dark .prose-article code {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffb4a2;
+}
+.dark .prose-article pre {
+  background: #16181d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.dark .prose-article pre code {
+  background: transparent;
+  color: #cbd5e1;
+}
+.dark .prose-article blockquote {
+  background: rgba(255, 255, 255, 0.04);
+  border-left-color: #60a5fa;
+  color: #9ca3af;
+}
+.dark .prose-article img {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.dark .prose-article th,
+.dark .prose-article td {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.dark .prose-article th {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+}
+
+/* ============ 一屏模式（xiaohev 的 blog_one_screen_mode） ============ */
+/* 页面本身不滚动，内容区按「屏幕高 − 菜单栏 − Dock 区」内部滚动 */
+body.one-screen-mode {
+  overflow: hidden;
+}
+body.one-screen-mode [data-desktop-surface] {
+  height: calc(100vh - 32px - 92px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+body.one-screen-mode footer {
+  display: none;
+}
+
+
+/* ============ macOS 鼠标指针（资源取自 macos-web 的 public/cursors） ============ */
+:root {
+  --system-cursor-default: url('/cursors/normal-select.svg');
+  --system-cursor-pointer: url('/cursors/link-select.svg');
+  --system-cursor-text-select: url('/cursors/text-select.svg');
+  --system-cursor-move: url('/cursors/move.svg');
+  --system-cursor-busy: url('/cursors/busy.webp');
+  --system-cursor-unavailable: url('/cursors/unavailable.svg');
+  --system-cursor-resize-ew: url('/cursors/diagonal-resize-1.svg');
+  --system-cursor-resize-ns: url('/cursors/vertical-resize.svg');
+  --system-cursor-resize-nwse: url('/cursors/diagonal-resize-2.svg');
+  --system-cursor-precision: url('/cursors/precision-select.svg');
+}
+
+html,
+body {
+  cursor: var(--system-cursor-default), auto;
+}
+
+/* 可点元素 → macOS 手型 */
+a,
+button,
+[role='button'],
+summary,
+select,
+label,
+.mac-menubar-item,
+.mac-menu-item {
+  cursor: var(--system-cursor-pointer), pointer;
+}
+
+/* 禁用态 */
+button:disabled,
+[aria-disabled='true'] {
+  cursor: var(--system-cursor-unavailable), not-allowed;
+}
+
+/* 文本 → macOS I 型 */
+input,
+textarea,
+[contenteditable='true'],
+.prose-article,
+.prose-blog {
+  cursor: var(--system-cursor-text-select), text;
+}
+
+/* 窗口拖拽 / 缩放（覆盖 Tailwind 的 cursor-*-resize） */
+[data-window-titlebar] {
+  cursor: var(--system-cursor-default), auto;
+}
+[data-window-titlebar]:active {
+  cursor: var(--system-cursor-move), move;
+}
+[data-resize='e'],
+[data-resize='w'],
+[data-resize='ew'] {
+  cursor: var(--system-cursor-resize-ew), ew-resize;
+}
+[data-resize='s'],
+[data-resize='n'],
+[data-resize='ns'] {
+  cursor: var(--system-cursor-resize-ns), ns-resize;
+}
+[data-resize='se'],
+[data-resize='nw'],
+[data-resize='nwse'] {
+  cursor: var(--system-cursor-resize-nwse), nwse-resize;
+}
+
+/* 终端 / 代码区用精度指针 */
+.terminal-surface {
+  cursor: var(--system-cursor-precision), default;
+}
+
+/* 触摸设备上指针无意义，交回系统 */
+@media (hover: none) {
+  html,
+  body,
+  a,
+  button,
+  input,
+  textarea {
+    cursor: auto;
+  }
+}
+
+
+/* macOS 窗口三色按钮（移植 macos-web 的 TrafficLights） */.mac-btn {
+  height: 13px;
+  width: 13px;
+  border-radius: 9999px;
+  transition: transform 100ms ease-in, filter 100ms ease-in;
+}
+.mac-btn svg {
+  opacity: 0;
+  transition: opacity 120ms ease-in;
+}
+.mac-traffic:hover .mac-btn {
+  transform: scale(1.15);
+}
+.mac-traffic:hover .mac-btn svg {
+  opacity: 0.65;
+}
+.mac-btn.btn-close {
+  background: #ff5f56;
+  box-shadow: 0 0 0 0.5px #e0443e;
+}
+.mac-btn.btn-minimize {
+  background: #ffbd2e;
+  box-shadow: 0 0 0 0.5px #dea123;
+}
+.mac-btn.btn-maximize {
+  background: #27c93f;
+  box-shadow: 0 0 0 0.5px #1aab29;
+}
+
