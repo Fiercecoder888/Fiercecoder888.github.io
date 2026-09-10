@@ -31,8 +31,12 @@ jobs:
           cache: pnpm
 
       # 让 GitHub 读出 Pages 的地址（用户站是 https://<user>.github.io）
+      # enablement: true = 若仓库还没开 Pages，就由工作流自己开（Source 设为 GitHub Actions），
+      # 省掉手动进 Settings → Pages 点一遍。已启用时是无副作用的空操作。
       - uses: actions/configure-pages@v5
         id: pages
+        with:
+          enablement: true
 
       # postinstall 会用 scripts/install-sqlite-prebuild.mjs 补 better-sqlite3 预编译包
       - name: Install dependencies
