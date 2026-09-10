@@ -16,6 +16,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ── 构建 ──────────────────────────────────────────────────────
+  # 这一层刻意不碰 Pages API：只用 GITHUB_TOKEN 能做的事（装依赖、构建、上传产物）。
+  # 原因：POST /repos/{owner}/{repo}/pages（创建 Pages 站点）不属于 GITHUB_TOKEN 的权限范围，
+  # 用了 configure-pages 的 enablement:true 会报 "Resource not accessible by integration"。
+  # 站点地址直接由账号名推导，所以构建不依赖 Pages 是否已启用。
   build:
     runs-on: ubuntu-latest
     steps:
@@ -30,14 +35,6 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # 让 GitHub 读出 Pages 的地址（用户站是 https://<user>.github.io）
-      # enablement: true = 若仓库还没开 Pages，就由工作流自己开（Source 设为 GitHub Actions），
-      # 省掉手动进 Settings → Pages 点一遍。已启用时是无副作用的空操作。
-      - uses: actions/configure-pages@v5
-        id: pages
-        with:
-          enablement: true
-
       # postinstall 会用 scripts/install-sqlite-prebuild.mjs 补 better-sqlite3 预编译包
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
@@ -45,17 +42,28 @@ jobs:
       - name: Generate static site
         run: pnpm generate
         env:
-          # sitemap / RSS / llms.txt 里的绝对地址
-          NUXT_PUBLIC_SITE_URL: ${{ steps.pages.outputs.base_url }}
+          # 用户站的地址固定是 https://<账号>.github.io（仓库名必须也叫 <账号>.github.io）
+          # sitemap / RSS / llms.txt / canonical 都用它
+          NUXT_PUBLIC_SITE_URL: https://${{ github.repository_owner }}.github.io
 
       # GitHub Pages 默认跑 Jekyll，会忽略 _nuxt/ 这类下划线开头的目录
       - name: Disable Jekyll
         run: touch .output/public/.nojekyll
 
+      - name: Show build summary
+        run: |
+          echo "产物大小: $(du -sh .output/public | cut -f1)"
+          echo "文件数  : $(find .output/public -type f | wc -l)"
+          echo "HTML 数 : $(find .output/public -name '*.html' | wc -l)"
+          echo "站点地址: https://${{ github.repository_owner }}.github.io"
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .output/public
 
+  # ── 发布 ──────────────────────────────────────────────────────
+  # 需要仓库已启用 Pages（Settings → Pages → Source 选 "GitHub Actions"）。
+  # 这一步必须先手动开一次，工作流自己开不了。
   deploy:
     needs: build
     runs-on: ubuntu-latest
