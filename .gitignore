@@ -8,3 +8,5 @@ dist
 .pnpm-store
 .tmp
 preview
+build.log
+*.log
