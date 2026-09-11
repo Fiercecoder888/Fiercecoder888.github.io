@@ -28,11 +28,17 @@ export default defineContentConfig({
         date: z.string(),
         summary: z.string(),
         tags: z.array(z.string()).default([]),
+        // 今天有哪些 Agent 参与（dsh / codex / claude / 你…）。
+        // 由 scripts/new-log.mjs 从提交里的 `Agent:` trailer 或 scripts/agent-sessions.mjs
+        // 采集的会话记录里推断；没有就留空数组。
+        agents: z.array(z.string()).default([]),
         project: z.string().optional(),
         pitfalls: z.array(z.object({
           problem: z.string(),
           solution: z.string(),
           time: z.string().optional(),
+          // 这一条坑是哪个 Agent 踩的（可选，与日志级 agents 是两种粒度）
+          agent: z.string().optional(),
         })).default([]),
         learned: z.array(z.string()).default([]),
         mood: z.number().min(1).max(5).optional(),

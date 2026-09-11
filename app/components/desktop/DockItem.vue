@@ -138,6 +138,17 @@ watch(targetWidth, () => {
   start()
 })
 
+/**
+ * 基座尺寸会随视口跨越 640px 断点变化（窄屏 48 / 宽屏 52，见 AppDock）。
+ * 之前的实现只在 mount 和指针移动时读取 base，改了 base 也不会重排；
+ * 这里直接同步，尺寸切换时要的是立刻到位（弹簧只负责 hover 放大）。
+ */
+watch(base, (value) => {
+  velocity = 0
+  width.value = value
+  targetWidth.value = value
+})
+
 /** 鼠标离 Dock 的垂直距离超过这个值就不放大（避免页面中部误触发放大） */
 const VERTICAL_GATE = 56
 

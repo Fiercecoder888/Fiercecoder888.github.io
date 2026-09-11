@@ -6,6 +6,9 @@
         把每篇日志里的「踩过的坑」摊平到一起 · 共
         <span class="font-medium text-gray-700">{{ entries.length }}</span> 个坑，涉及
         <span class="font-medium text-gray-700">{{ tagStats.length }}</span> 个标签
+        <template v-if="agentStats.length">
+          ，涉及 <span class="font-medium text-gray-700">{{ agentStats.length }}</span> 个 Agent
+        </template>
         <template v-if="filtering">
           · 当前筛出 <span class="font-medium text-gray-700">{{ filtered.length }}</span> 个
         </template>
@@ -72,6 +75,37 @@
           #{{ tag.name }} <span class="opacity-70">{{ tag.count }}</span>
         </button>
       </div>
+
+      <!-- 按 Agent 筛选：与标签筛选并列；没有 agent 数据的坑归在「全部」里，不会被漏掉 -->
+      <div
+        v-if="agentStats.length"
+        class="flex flex-wrap items-center gap-1.5 border-t border-gray-200 pt-3"
+      >
+        <span class="mr-0.5 text-[11px] text-gray-400">按 Agent</span>
+        <button
+          type="button"
+          class="rounded-full border px-2.5 py-1 text-[11px] transition"
+          :class="activeAgent === ''
+            ? 'border-transparent bg-[var(--system-color-primary)] text-white'
+            : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:text-blue-600'"
+          @click="activeAgent = ''"
+        >
+          全部 <span class="opacity-70">{{ entries.length }}</span>
+        </button>
+        <button
+          v-for="agent in agentStats"
+          :key="agent.key"
+          type="button"
+          class="rounded-full border px-2.5 py-1 text-[11px] font-medium transition"
+          :class="activeAgent === agent.key
+            ? 'border-transparent bg-[var(--system-color-primary)] text-white'
+            : `${agentTone(agent.key)} hover:opacity-80`"
+          :data-pitfall-agent="agent.key"
+          @click="toggleAgent(agent.key)"
+        >
+          {{ agent.label }} <span class="opacity-70">{{ agent.count }}</span>
+        </button>
+      </div>
     </section>
 
     <div v-if="filtered.length" class="space-y-3">
@@ -91,6 +125,14 @@
           <NuxtLink :to="entry.path" class="line-clamp-1 transition hover:text-blue-600">
             {{ entry.logTitle }}
           </NuxtLink>
+          <!-- 这条坑是谁踩的：entry.agent 为空时整块不渲染 -->
+          <span
+            v-if="entry.agent"
+            class="rounded border px-1.5 py-0.5 text-[11px] font-medium"
+            :class="agentTone(entry.agent)"
+          >
+            {{ agentLabel(entry.agent) }}
+          </span>
           <span
             v-if="entry.time"
             class="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-gray-500"
@@ -135,7 +177,7 @@
         工作日志的内容集合还没准备好，稍后再来看看。
       </template>
       <template v-else-if="entries.length">
-        没有匹配的坑，换个关键字或者点「全部」看看。
+        没有匹配的坑，换个关键字，或者把标签 / Agent 都点回「全部」看看。
       </template>
       <template v-else>
         坑库还是空的 —— 说明目前一切顺利 🎉<br>
@@ -183,6 +225,8 @@ interface PitfallEntry {
   path: string
   /** 来源日志的标签（坑本身没有标签字段，按日志标签归档） */
   tags: string[]
+  /** 这条坑是谁踩的：归一化后的小写键；没填 agent 时是空串（不显示徽章） */
+  agent: string
 }
 
 const entries = computed<PitfallEntry[]>(() => {
@@ -200,6 +244,8 @@ const entries = computed<PitfallEntry[]>(() => {
         logTitle: log.title,
         path: log.path,
         tags,
+        // 缺字段 / 空串 / 纯空格一律归一成 ''，模板用 v-if 挡掉，不会渲染出 undefined
+        agent: agentKey(pitfall.agent),
       })
     })
   }
@@ -218,20 +264,43 @@ const tagStats = computed(() => {
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 })
 
+/**
+ * Agent 聚合：统计每个 Agent 踩了多少个坑，按频次倒序。
+ * **只统计填了 agent 的坑** —— 没填的那些既不出现在这里，也不影响它们被「全部」显示。
+ */
+const agentStats = computed(() => {
+  const map = new Map<string, number>()
+  for (const entry of entries.value) {
+    if (!entry.agent) continue
+    map.set(entry.agent, (map.get(entry.agent) ?? 0) + 1)
+  }
+  return [...map.entries()]
+    .map(([key, count]) => ({ key, label: agentLabel(key), count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+})
+
 const activeTag = ref('')
+const activeAgent = ref('')
 const keyword = ref('')
 
 function toggleTag(name: string) {
   activeTag.value = activeTag.value === name ? '' : name
 }
 
-const filtering = computed(() => Boolean(activeTag.value) || Boolean(keyword.value.trim()))
+function toggleAgent(key: string) {
+  activeAgent.value = activeAgent.value === key ? '' : key
+}
 
-/** 纯前端过滤：标签 + 问题/解决方案/标题/日期的关键字匹配 */
+const filtering = computed(() =>
+  Boolean(activeTag.value) || Boolean(activeAgent.value) || Boolean(keyword.value.trim()))
+
+/** 纯前端过滤：标签 + Agent + 问题/解决方案/标题/日期/Agent 名的关键字匹配 */
 const filtered = computed(() => {
   const query = keyword.value.trim().toLowerCase()
   return entries.value.filter((entry) => {
     if (activeTag.value && !entry.tags.includes(activeTag.value)) return false
+    // 没填 agent 的坑不属于任何 Agent 分组，只有「全部」能看到它们
+    if (activeAgent.value && entry.agent !== activeAgent.value) return false
     if (!query) return true
     const haystack = [
       entry.problem,
@@ -240,6 +309,7 @@ const filtered = computed(() => {
       entry.date,
       entry.time ?? '',
       entry.tags.join(' '),
+      entry.agent ? agentLabel(entry.agent) : '',
     ].join(' ').toLowerCase()
     return haystack.includes(query)
   })

@@ -42,7 +42,11 @@ const USAGE = `工作日志脚手架
   node scripts/new-log.mjs --date 2026-09-09      # 补写某一天
   node scripts/new-log.mjs --force                # 草稿已存在时覆盖
   node scripts/new-log.mjs --dry-run              # 只打印草稿，不落盘
+  node scripts/new-log.mjs --no-sessions          # 跳过 Agent 会话采集（只按 git 归属）
   node scripts/new-log.mjs --publish 2026-09-10   # 发布草稿到 content/worklog/
+
+归属：提交里的 \`Agent: dsh\` trailer 优先；没有 trailer 时用 scripts/agent-sessions.mjs
+     从本机 Codex / Claude Code / DSH 的会话记录推断（只取元数据与截断摘要，正文永不进日志）。
 
 流程：new-log.mjs → 编辑 ${DRAFTS_DIR}/<日期>.md → --publish → git add/commit/push`
 
@@ -121,8 +125,9 @@ function topDir(path) {
 
 /**
  * 采集某一天的提交。
- * 一次 git log 拿全部信息（hash / 时间 / 标题 / 父提交 / 逐文件增删），
+ * 一次 git log 拿全部信息（hash / 时间 / 标题 / **正文** / 父提交 / 逐文件增删），
  * 不为每个提交单独调一次 git。
+ * 正文（`%b`）只用来读 `Agent:` trailer —— 提交正文本身**不进草稿**。
  */
 function collectDay(date) {
   // 查询窗口左右各放宽一天，再在 JS 里按「本机时区的日期」精确过滤：
@@ -134,26 +139,27 @@ function collectDay(date) {
     `--since=${since}`,
     `--until=${until}`,
     '--date=format-local:%Y-%m-%dT%H:%M',
-    '--pretty=format:%x01%h%x1f%ad%x1f%s%x1f%p',
+    '--pretty=format:%x01%h%x1f%ad%x1f%s%x1f%p%x1f%b%x02',
     '--numstat',
     '--root',
   ])
 
   const commits = []
   for (const chunk of raw.split('\x01').slice(1)) {
-    const lines = chunk.split(/\r?\n/)
-    const header = lines.find(line => line.includes('\x1f'))
-    if (!header) continue
-    const [hash, stamp, subjectRaw, parentsRaw] = header.split('\x1f')
+    // \x02 之后是 numstat：正文里可能有空行，靠这个标记切干净
+    const [headerRaw, statRaw = ''] = chunk.split('\x02')
+    const parts = headerRaw.split('\x1f')
+    if (parts.length < 4) continue
+    const [hash, stamp, subjectRaw, parentsRaw, bodyRaw = ''] = parts
     const stampDate = stamp.slice(0, 10)
     if (stampDate !== date) continue
 
     const files = []
-    for (const line of lines) {
-      if (!line || line.includes('\x1f')) continue
-      const parts = line.split('\t')
-      if (parts.length < 3) continue
-      const [added, deleted, ...rest] = parts
+    for (const line of statRaw.split(/\r?\n/)) {
+      if (!line) continue
+      const cols = line.split('\t')
+      if (cols.length < 3) continue
+      const [added, deleted, ...rest] = cols
       const binary = added === '-' || deleted === '-'
       files.push({
         path: normalizePath(rest.join('\t')),
@@ -167,6 +173,7 @@ function collectDay(date) {
       hash: hash.trim(),
       time: stamp.slice(11, 16),
       subject: subjectRaw.replace(/^\uFEFF/, '').trim(),
+      body: bodyRaw.replace(/^\uFEFF/, '').trim(),
       parents: parentsRaw.trim().split(/\s+/).filter(Boolean),
       files,
     })
@@ -178,16 +185,22 @@ function collectDay(date) {
 
 function summarize(commits) {
   const dirs = new Map()
-  let files = 0
+  // 「同一文件反复改只算一次」：全天按**唯一路径**去重，重复改的文件只计一次
+  const uniquePaths = new Set()
+  let hunks = 0
   let added = 0
   let deleted = 0
   let binary = 0
   for (const commit of commits) {
+    const seenInCommit = new Set()
     for (const file of commit.files) {
-      files += 1
+      hunks += 1
       added += file.added
       deleted += file.deleted
       if (file.binary) binary += 1
+      uniquePaths.add(file.path)
+      if (seenInCommit.has(file.path)) continue
+      seenInCommit.add(file.path)
       const dir = topDir(file.path)
       dirs.set(dir, (dirs.get(dir) ?? 0) + 1)
     }
@@ -195,11 +208,38 @@ function summarize(commits) {
   const top = [...dirs.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, 5)
-  return { files, added, deleted, binary, top, merges: commits.filter(c => c.parents.length > 1).length }
+  return {
+    files: uniquePaths.size,
+    hunks,
+    added,
+    deleted,
+    binary,
+    top,
+    merges: commits.filter(c => c.parents.length > 1).length,
+  }
 }
 
-// ── 草稿生成 ──────────────────────────────────────────────────────────────
-const TYPE_WEIGHT = { feat: 4, fix: 3, perf: 3, refactor: 2, docs: 2, test: 1, build: 1, ci: 1, chore: 0, style: 0 }
+// ── 去噪：权重 / 合并 / 折叠 ───────────────────────────────────────────────
+/**
+ * 提交类型权重。只有 feat/fix/perf/refactor 算「有内容」；
+ * chore/style/docs/ci/test/build 一律降级 —— 它们仍然参与统计，但不单独成行。
+ */
+const TYPE_WEIGHT = { feat: 4, fix: 3, perf: 3, refactor: 2, docs: 1, test: 1, build: 0, ci: 0, chore: 0, style: 0 }
+/** 有内容的最低权重（>= 这个值才可能单独成行） */
+const CONTENT_WEIGHT = 2
+/** 「今天做了什么」最多几行 */
+const MAX_CONTENT_LINES = 5
+/** 折叠摘要里会点名统计的类型（顺序就是打印顺序） */
+const FOLD_NAMES = ['feat', 'fix', 'perf', 'refactor', 'docs', 'test', 'build', 'ci', 'chore', 'style']
+
+/** fixup!/squash!/wip/typo/合并/回滚这类提交：不单独成行，并进最近的可见提交 */
+const MERGE_INTO_PREVIOUS = [
+  /^(fixup|squash|amend)!\s*/i,
+  /^wip\b/i,
+  /^typo\b/i,
+  /^(merge|revert|lint|format|style)\b/i,
+  /^Merge (branch|pull request|remote-tracking)/,
+]
 
 function stripTypePrefix(subject) {
   const match = /^[a-zA-Z]+(\([^)]*\))?!?:\s*/.exec(subject)
@@ -209,6 +249,20 @@ function stripTypePrefix(subject) {
 function typeOf(subject) {
   const match = /^([a-zA-Z]+)(\([^)]*\))?!?:/.exec(subject)
   return match ? match[1].toLowerCase() : ''
+}
+
+function isNoiseCommit(commit) {
+  if (commit.parents.length > 1) return true
+  return MERGE_INTO_PREVIOUS.some(re => re.test(commit.subject.trim()))
+}
+
+function weightOf(commit) {
+  if (isNoiseCommit(commit)) return 0
+  return TYPE_WEIGHT[typeOf(commit.subject)] ?? 1
+}
+
+function hasContent(commit) {
+  return weightOf(commit) >= CONTENT_WEIGHT
 }
 
 /** 从当天提交里挑一个最像「今天标题」的：优先 feat/fix，同档取最长的 */
@@ -223,6 +277,77 @@ function candidateTitles(commits) {
     .filter((text, index, all) => text && all.indexOf(text) === index)
 }
 
+/**
+ * 选「今天做了什么」要展开的行。
+ * 规则（用户最在意的「不要垃圾信息」）：
+ *   1. 噪声提交（merge / fixup! / wip / typo / revert）直接并进前一条，不单独成行；
+ *   2. 只有 feat/fix/perf/refactor 算有内容，其它只参与统计；
+ *   3. 硬预算：最多 MAX_CONTENT_LINES 行，按权重（同权重按改动量）截断；
+ *   4. 被截掉的和被折叠的，统一在末尾用**一行**摘要说明「另有 N 个低权重提交：chore ×3」。
+ */
+function pickContentLines(commits) {
+  const shown = []
+  const folded = new Map() // type → count
+  const mergedInto = new Map() // hash → [被并进来的提交标题]
+  let foldedNoise = 0
+
+  // 先按权重分出「能单独成行」和「折叠」两类，并记录顺序，
+  // 之后再决定哪些噪声能并进「上一条**被保留下来的**提交」。
+  const noise = []
+  for (const commit of commits) {
+    if (isNoiseCommit(commit)) {
+      foldedNoise += 1
+      noise.push(commit)
+      continue
+    }
+    if (!hasContent(commit)) {
+      const type = typeOf(commit.subject) || 'other'
+      folded.set(type, (folded.get(type) ?? 0) + 1)
+      continue
+    }
+    shown.push({ commit, weight: weightOf(commit) })
+  }
+
+  const ranked = [...shown].sort((a, b) => b.weight - a.weight
+    || b.commit.files.length - a.commit.files.length
+    || a.commit.time.localeCompare(b.commit.time))
+  const keep = new Set(ranked.slice(0, MAX_CONTENT_LINES).map(item => item.commit.hash))
+  const lines = []
+  for (const item of shown) {
+    if (keep.has(item.commit.hash)) lines.push({ commit: item.commit, merged: mergedInto.get(item.commit.hash) ?? [] })
+    else {
+      const type = typeOf(item.commit.subject) || 'other'
+      folded.set(type, (folded.get(type) ?? 0) + 1)
+    }
+  }
+
+  // 噪声提交并进「时间上最近的、且真的会被打印出来的」那条；
+  // 前面没有可见提交时（例如当天第一条就是 fixup!）只能并进折叠摘要，不能凭空挂到一个不存在的行上。
+  for (const commit of noise) {
+    const target = lines.filter(line => line.commit.time <= commit.time).pop()
+    if (!target) continue
+    const list = mergedInto.get(target.commit.hash) ?? []
+    list.push(commit.subject)
+    mergedInto.set(target.commit.hash, list)
+  }
+  for (const line of lines) line.merged = mergedInto.get(line.commit.hash) ?? []
+  lines.sort((a, b) => a.commit.time.localeCompare(b.commit.time))
+
+  // 折叠摘要：一行说清「被折叠了什么」，但不展开
+  const parts = FOLD_NAMES
+    .filter(type => folded.has(type))
+    .map(type => `${type} ×${folded.get(type)}`)
+  const other = [...folded.keys()].filter(type => !FOLD_NAMES.includes(type))
+  for (const type of other.sort()) parts.push(`${type} ×${folded.get(type)}`)
+  const total = [...folded.values()].reduce((sum, n) => sum + n, 0)
+  const noiseText = foldedNoise ? `；${foldedNoise} 个合并/修补提交已并入上一条` : ''
+  const foldText = total
+    ? `（另有 ${total} 个低权重提交：${parts.join('、')}${noiseText}，已折叠 —— 要看细节跑 git log）`
+    : (foldedNoise ? `（${foldedNoise} 个合并/修补提交已并入上一条，未展开）` : '')
+
+  return { lines, folded, foldedNoise, foldText, total }
+}
+
 /** YAML 标量：需要时用单引号包裹并转义 */
 function yamlString(value) {
   const text = String(value)
@@ -231,6 +356,130 @@ function yamlString(value) {
     || /^\s|\s$/.test(text)
     || /^(true|false|null|~|\d+)$/i.test(text)
   return needsQuote ? `'${text.replace(/'/g, "''")}'` : text
+}
+
+// ── 归属：提交 trailer + 会话记录 ─────────────────────────────────────────
+/**
+ * 已知 Agent 的别名 → 规范名（写进 frontmatter 的 agents 用短名）。
+ * 未知名字不做归一化，直接小写原样保留 —— 以后多接一个 Agent 不用改代码。
+ */
+const AGENT_ALIASES = {
+  'dsh': 'dsh',
+  'deepseek-harness': 'dsh',
+  'codex': 'codex',
+  'codex-cli': 'codex',
+  'openai-codex': 'codex',
+  'claude': 'claude',
+  'claude-code': 'claude',
+  'claudecode': 'claude',
+  'cursor': 'cursor',
+  'copilot': 'copilot',
+  'gemini': 'gemini',
+  'human': '你',
+  'me': '你',
+  '我': '你',
+  '你': '你',
+}
+
+const AGENT_TRAILER_RE = /^[ \t]*(?:Agent|智能体|agent)[ \t]*[:：][ \t]*([^\r\n]+)$/gim
+
+function canonicalAgent(raw) {
+  const name = String(raw ?? '').trim().replace(/^["']|["']$/g, '').trim()
+  if (!name) return ''
+  return AGENT_ALIASES[name.toLowerCase()] ?? name.toLowerCase()
+}
+
+/** 从提交信息里读 `Agent: dsh` 这类 trailer（大小写不敏感、允许缩进），返回规范名数组 */
+function agentsFromTrailers(commits) {
+  const found = []
+  for (const commit of commits) {
+    if (!commit.body) continue
+    for (const match of commit.body.matchAll(AGENT_TRAILER_RE)) {
+      for (const piece of String(match[1]).split(/[,、/|]/)) {
+        const name = canonicalAgent(piece)
+        if (name && !found.includes(name)) found.push(name)
+      }
+    }
+  }
+  return found
+}
+
+/**
+ * 采集三个 Agent 的会话信号。
+ * 适配器是独立模块，出错/缺失一律降级为「今天没有会话线索」，**绝不让草稿生成失败**。
+ * 隐私：适配器只返回元数据与截断摘要（见 scripts/agent-sessions.mjs 顶部说明）。
+ */
+async function collectSessions(date, enabled) {
+  if (!enabled) return { ok: false, skipped: true, sessions: [], notes: [], agents: [] }
+  try {
+    const { collectAgentSessions } = await import('./agent-sessions.mjs')
+    const result = await collectAgentSessions(date, {
+      repoDir: process.cwd(),
+      // 别把「正在写这篇日志的会话」算成今天参与工作的 Agent
+      excludeSessionIds: [process.env.DSH_SESSION_ID].filter(Boolean),
+    })
+    return {
+      ok: true,
+      skipped: false,
+      sessions: result.sessions,
+      notes: result.notes,
+      dropped: result.dropped,
+      agents: [...new Set(result.sessions.map(s => s.agent))],
+    }
+  }
+  catch (error) {
+    return {
+      ok: false,
+      skipped: false,
+      sessions: [],
+      notes: [`会话适配器没跑起来（${error?.message ?? error}），本次只按 git 归属`],
+      agents: [],
+    }
+  }
+}
+
+/**
+ * 合并归属：**提交 trailer 优先**（那是人明确写下的），
+ * trailer 一点都没有时，才用会话记录推断。
+ */
+function mergeAgents(trailerAgents, sessionAgents) {
+  if (trailerAgents.length) {
+    return { agents: trailerAgents, source: 'trailer' }
+  }
+  if (sessionAgents.length) {
+    return { agents: sessionAgents, source: 'sessions' }
+  }
+  return { agents: [], source: 'none' }
+}
+
+function agentListYaml(agents) {
+  return `[${agents.map(a => yamlString(a)).join(', ')}]`
+}
+
+/**
+ * 「今天的会话线索」小节。
+ * 明确标注这是**候选**：会话摘要由脚本截断生成，发布前请删掉或改写。
+ */
+function buildSessionSection(sessions, notes) {
+  const lines = []
+  lines.push('', '## 今天的会话线索（自动采集，可删）', '')
+  lines.push('<!-- 以下内容由 scripts/agent-sessions.mjs 从本机会话记录里采集：**只有元数据与截断摘要**，')
+  lines.push('     正文从未被写入。这是**候选**，不是事实陈述 —— 发布前请删掉整节，或改写后再留。 -->')
+  if (!sessions.length) {
+    lines.push('')
+    lines.push('（今天没有从 Codex / Claude Code / DSH 里采集到属于本仓库的会话）')
+    for (const note of notes) lines.push(`<!-- ${note} -->`)
+    return lines
+  }
+  lines.push('')
+  for (const session of sessions) {
+    lines.push(`- **${session.agent}** ${session.startTime}–${session.endTime}（约 ${session.durationMinutes} 分钟，工具调用 ${session.toolCalls} 次${session.childSessions ? `，含 ${session.childSessions} 个子代理会话` : ''}${session.codeChanges ? '，有代码改动' : ''}${session.retries ? `，失败/重试 ${session.retries} 次` : ''}）`)
+    if (session.request) lines.push(`  - 需求（截断）：${session.request}`)
+    if (session.conclusion) lines.push(`  - 结论（截断）：${session.conclusion}`)
+  }
+  lines.push('')
+  lines.push(`<!-- 采集说明：${notes.join('；')} -->`)
+  return lines
 }
 
 function commitLine(commit) {
@@ -242,9 +491,11 @@ function commitLine(commit) {
   return `- ${commit.time} \`${commit.hash}\` ${commit.subject}${stats}`
 }
 
-function buildDraft(date, commits, summary) {
+function buildDraft(date, commits, summary, ownership, sessions) {
   const titles = candidateTitles(commits)
   const title = titles[0] ?? '（待填）'
+  const { agents } = ownership
+  const pick = pickContentLines(commits)
   const lines = []
 
   lines.push('---')
@@ -252,8 +503,15 @@ function buildDraft(date, commits, summary) {
   lines.push(`date: '${date}'`)
   lines.push('summary: （一句话总结今天）')
   lines.push('tags: []')
+  // 归属契约：agents 是「今天有哪些 Agent 参与」，每条坑再用 pitfalls[].agent 记「这条坑是谁踩的」
+  lines.push(`agents: ${agentListYaml(agents)}${agents.length ? '' : '   # 今天有哪些 Agent 参与：dsh / codex / claude / 你'}`)
   lines.push('# project: my-blog         # 可选：项目名，方便以后按项目聚合')
   lines.push('pitfalls: []')
+  lines.push('# pitfalls:                # 填坑时改成这个形状（agent 表示这条坑是谁踩的）')
+  lines.push('#   - problem: （现象）')
+  lines.push('#     solution: （怎么解决的）')
+  lines.push('#     time: 约 30 分钟       # 可选')
+  lines.push("#     agent: 'dsh'          # 可选：dsh / codex / claude / 你")
   lines.push('learned: []')
   lines.push('# mood: 4                  # 可选：心情 1-5')
   lines.push('draft: true')
@@ -267,15 +525,22 @@ function buildDraft(date, commits, summary) {
     lines.push('', `（${date} 没有 git 提交）`)
   }
   else {
-    lines.push('<!-- 下面这组是从 git 提交自动生成的，按需增删；想看某个提交改了哪些文件：git show --stat <hash> -->', '')
-    for (const commit of commits) lines.push(commitLine(commit))
+    lines.push('<!-- 下面这几行是从 git 提交里**按权重挑出来**的：只有 feat/fix/perf/refactor 单独成行，')
+    lines.push(`     最多 ${MAX_CONTENT_LINES} 行；chore/docs/test 这类低权重提交已折叠成下面那行摘要（原文没删，跑 git log 还能看到）。`)
+    lines.push('     想看某个提交改了哪些文件：git show --stat <hash> -->', '')
+    for (const line of pick.lines) {
+      lines.push(commitLine(line.commit))
+      for (const merged of line.merged) lines.push(`  - （并入）${merged}`)
+    }
+    if (pick.foldText) lines.push(`- ${pick.foldText}`)
     lines.push('')
     const dirText = summary.top.length
       ? summary.top.map(([dir, count]) => `\`${dir}\` ${count} 个文件`).join('、')
       : '（无）'
     lines.push(`主要改动目录：${dirText}`)
     const extra = summary.binary ? `，其中 ${summary.binary} 个二进制文件（不计行数）` : ''
-    lines.push(`全天合计：${commits.length} 个提交，${summary.files} 个文件，+${summary.added} / -${summary.deleted}${extra}`)
+    const hunks = summary.hunks !== summary.files ? `（同一文件反复改只算一次；实际改动记录 ${summary.hunks} 条）` : ''
+    lines.push(`全天合计：${commits.length} 个提交，${summary.files} 个文件${hunks}，+${summary.added} / -${summary.deleted}${extra}`)
     if (summary.merges) lines.push(`（含 ${summary.merges} 个合并提交，其文件统计为空是 git 的正常行为）`)
   }
 
@@ -284,10 +549,14 @@ function buildDraft(date, commits, summary) {
   }
 
   lines.push('', '## 踩的坑与解决', '')
-  lines.push('<!-- 把 frontmatter 里的 pitfalls 在这里展开写（problem / solution / 耗时）；')
+  lines.push('<!-- 把 frontmatter 里的 pitfalls 在这里展开写（problem / solution / 耗时 / agent）；')
   lines.push('     结构化的那份留在 frontmatter 里，以后「坑库」要靠它聚合，散在正文里就永远是死数据。 -->')
+  const participant = agents.length ? agents.join('、') : '（未采集到）'
+  lines.push(`<!-- 每条坑请补上 agent（dsh / codex / claude / 你）；会话记录显示今天参与：${participant} -->`)
   lines.push('', '## 今天学到', '')
   lines.push('<!-- 一句话一条，同步进 frontmatter 的 learned -->')
+
+  for (const line of buildSessionSection(sessions.sessions, sessions.notes)) lines.push(line)
   lines.push('')
 
   return lines.join('\n')
@@ -343,7 +612,7 @@ function syncDrafts(action) {
   }
 }
 
-function doDraft(date) {
+async function doDraft(date) {
   const target = resolve(DRAFTS_DIR, `${date}.md`)
   const force = has('--force')
   const dry = has('--dry-run')
@@ -362,11 +631,16 @@ function doDraft(date) {
     fail(`读取 git 日志失败：${error.message}`)
   }
   const summary = summarize(commits)
-  const draft = buildDraft(date, commits, summary)
+
+  // 归属：提交 trailer 优先，没有才用会话记录推断
+  const trailerAgents = agentsFromTrailers(commits)
+  const sessions = await collectSessions(date, !has('--no-sessions'))
+  const ownership = mergeAgents(trailerAgents, sessions.agents)
+  const draft = buildDraft(date, commits, summary, ownership, sessions)
 
   if (dry) {
     console.log(draft)
-    console.log(`（--dry-run：未写入 ${rel(target)}；采集到 ${commits.length} 个提交）`)
+    console.log(`（--dry-run：未写入 ${rel(target)}；采集到 ${commits.length} 个提交，${sessions.sessions.length} 条会话信号）`)
     process.exit(0)
   }
 
@@ -382,6 +656,9 @@ function doDraft(date) {
   else {
     console.log('  · 当天没有提交：仍生成了一份空骨架，手动补写即可')
   }
+  console.log(`  · 会话线索 ${sessions.sessions.length} 条（${sessions.agents.length ? sessions.agents.join('、') : '无'}）`)
+  console.log(`  · agents 归属来源：${ownership.source === 'trailer' ? '提交里的 Agent: trailer' : ownership.source === 'sessions' ? '会话记录推断' : '没有采集到'}${ownership.agents.length ? ` → ${ownership.agents.join('、')}` : ''}`)
+  if (sessions.skipped) console.log('  · 已用 --no-sessions 跳过会话采集')
   syncDrafts(`new ${date}`)
   console.log('')
   reportNextSteps(date)
@@ -486,4 +763,4 @@ for (const [label, value] of [['--date', dateArg], ['--publish', publishArg]]) {
 }
 
 if (publishArg !== null) doPublish(publishArg || dateArg || today)
-else doDraft(dateArg || today)
+else await doDraft(dateArg || today)

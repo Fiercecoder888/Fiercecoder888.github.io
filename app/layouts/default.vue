@@ -15,14 +15,24 @@
         </DesktopMacWindow>
       </main>
 
-      <footer class="pb-28 pt-6 text-center text-[11px] text-white/40">
+      <!-- 内部栏目用 NuxtLink：nuxt generate 只爬真实 <a href>，多一层锚点 = 多一层页面可被发现的保障
+           （/progress 当初就是因为全站没有任何文本链接，才需要手动加进 prerender.routes） -->
+      <footer class="pb-48 pt-6 text-center text-[11px] text-white/40 sm:pb-28">
         <p>© {{ new Date().getFullYear() }} {{ SITE.name }} · Nuxt 4 + Nuxt Content</p>
-        <p class="mt-1">
-          <a href="/sitemap.xml" class="transition hover:text-white/70">Sitemap</a>
+        <p class="mt-1 px-2">
+          <NuxtLink to="/" class="whitespace-nowrap transition hover:text-white/70">首页</NuxtLink>
           <span class="mx-1.5">·</span>
-          <a href="/llms.txt" class="transition hover:text-white/70">llms.txt</a>
+          <NuxtLink to="/blog" class="whitespace-nowrap transition hover:text-white/70">文章</NuxtLink>
           <span class="mx-1.5">·</span>
-          <a href="/rss.xml" class="transition hover:text-white/70">RSS</a>
+          <NuxtLink to="/worklog" class="whitespace-nowrap transition hover:text-white/70">工作日志</NuxtLink>
+          <span class="mx-1.5">·</span>
+          <NuxtLink to="/progress" class="whitespace-nowrap transition hover:text-white/70">无限进步</NuxtLink>
+          <span class="mx-1.5">·</span>
+          <a href="/sitemap.xml" class="whitespace-nowrap transition hover:text-white/70">Sitemap</a>
+          <span class="mx-1.5">·</span>
+          <a href="/llms.txt" class="whitespace-nowrap transition hover:text-white/70">llms.txt</a>
+          <span class="mx-1.5">·</span>
+          <a href="/rss.xml" class="whitespace-nowrap transition hover:text-white/70">RSS</a>
         </p>
       </footer>
     </div>

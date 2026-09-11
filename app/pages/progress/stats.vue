@@ -67,6 +67,35 @@
         还没有踩坑记录，一切顺利。
       </p>
     </section>
+
+    <!-- Agent 参与分布：按日志级 agents 统计（所有日志都没填 agents 时整块不显示） -->
+    <section v-if="agentParticipation.length" class="mt-8">
+      <h2 class="mb-3 flex items-center gap-3 text-sm font-semibold text-gray-700">
+        <span>Agent 参与分布</span>
+        <span class="h-px flex-1 bg-gray-200" />
+        <span class="text-xs font-normal text-gray-400">{{ agentParticipation.length }} 个 Agent</span>
+      </h2>
+
+      <div class="space-y-3.5 rounded-xl border border-gray-200 bg-white p-5">
+        <div v-for="agent in agentParticipation" :key="agent.key" :data-progress-agent="agent.key">
+          <div class="flex items-center justify-between text-xs">
+            <span
+              class="rounded border px-1.5 py-0.5 text-[11px] font-medium"
+              :class="agentTone(agent.key)"
+            >
+              {{ agent.label }}
+            </span>
+            <span class="text-gray-400">参与 {{ agent.count }} 天</span>
+          </div>
+          <div class="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+            <div
+              class="h-full rounded-full bg-[var(--system-color-primary)] transition-all duration-300"
+              :style="{ width: `${agent.percent}%` }"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -210,6 +239,34 @@ const topTags = computed(() => {
     .slice(0, 5)
   const max = list[0]?.count ?? 1
   // 最小 8% 保证条形可见
+  return list.map(item => ({ ...item, percent: Math.max(8, Math.round((item.count / max) * 100)) }))
+})
+
+/**
+ * Agent 参与分布：按日志级 `agents` 统计，单位是「天」。
+ * 同一天写两篇日志只算一天；同一条日志里重复写同一个 Agent 也只算一次。
+ * 没有任何日志填过 agents → 返回空数组，模板整块不显示（不显示空图）。
+ */
+const agentParticipation = computed<{ key: string, label: string, count: number, percent: number }[]>(() => {
+  const map = new Map<string, { label: string, dates: Set<string> }>()
+  for (const log of logs.value ?? []) {
+    const date = formatDate(log.date)
+    const seen = new Set<string>()
+    for (const raw of log.agents ?? []) {
+      const key = agentKey(raw)
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      const item = map.get(key) ?? { label: agentLabel(key), dates: new Set<string>() }
+      item.dates.add(date)
+      map.set(key, item)
+    }
+  }
+  const list = [...map.entries()]
+    .map(([key, item]) => ({ key, label: item.label, count: item.dates.size }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  if (!list.length) return []
+  const max = list[0]?.count ?? 1
+  // 与 Top 5 标签同一种进度条：最小 8% 保证条形可见
   return list.map(item => ({ ...item, percent: Math.max(8, Math.round((item.count / max) * 100)) }))
 })
 

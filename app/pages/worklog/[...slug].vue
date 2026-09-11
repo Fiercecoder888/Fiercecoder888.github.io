@@ -24,6 +24,19 @@
           </span>
           <span class="text-gray-400">{{ post.mood }}/5</span>
         </span>
+        <!-- 今天参与：只在日志级 agents 有内容时显示，空的日志不留空壳 -->
+        <span v-if="participants.length" class="flex flex-wrap items-center gap-1.5">
+          <span>今天参与</span>
+          <span
+            v-for="name in participants"
+            :key="name"
+            class="rounded border px-1.5 py-0.5 text-[11px] font-medium"
+            :class="agentTone(name)"
+            :data-worklog-agent="name"
+          >
+            {{ agentLabel(name) }}
+          </span>
+        </span>
       </div>
 
       <div v-if="post.tags?.length" class="mt-4 flex flex-wrap gap-2">
@@ -58,6 +71,14 @@
         >
           <div class="mb-3 flex items-center gap-2 text-xs text-amber-700">
             <span class="font-semibold">坑 {{ i + 1 }}</span>
+            <!-- 这条坑是谁踩的：没填 agent 就不显示徽章，不显示「未知」之类的噪音 -->
+            <span
+              v-if="normalizeAgent(pitfall.agent)"
+              class="rounded border px-1.5 py-0.5 text-[11px] font-medium"
+              :class="agentTone(pitfall.agent)"
+            >
+              {{ agentLabel(pitfall.agent) }}
+            </span>
             <span class="h-px flex-1 bg-amber-100" />
             <span v-if="pitfall.time" class="text-gray-400">花了 {{ pitfall.time }}</span>
           </div>
@@ -178,6 +199,16 @@ if (import.meta.server && !post.value) {
 }
 
 useWindowTitle(computed(() => post.value?.title ?? '工作日志'))
+
+/**
+ * 今天参与的 Agent（日志级 agents）。
+ * agents 可能整个缺字段、也可能混进空串/纯空格，这里统一归一化 + 去重，
+ * 结果为 0 条时模板整块不显示。
+ */
+const participants = computed(() => {
+  const list = (post.value?.agents ?? []).map(name => agentKey(name))
+  return list.filter((name, index) => name && list.indexOf(name) === index)
+})
 
 const { data: siblings } = await useAsyncData('worklog-siblings', () =>
   queryCollection('worklog')
