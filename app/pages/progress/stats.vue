@@ -18,6 +18,15 @@
         >
           {{ tab.label }}
         </NuxtLink>
+        <!-- 这里是聚合视图，原文在 /worklog —— 不给个出口，访客只能看到汇总、进不去具体某一天 -->
+        <span class="mx-1 h-5 w-px self-center bg-gray-200" />
+        <NuxtLink
+          to="/worklog"
+          class="self-center text-xs text-gray-500 underline-offset-2 transition hover:text-blue-600 hover:underline"
+          data-progress-to-worklog
+        >
+          看日志原文 →
+        </NuxtLink>
       </nav>
     </header>
 

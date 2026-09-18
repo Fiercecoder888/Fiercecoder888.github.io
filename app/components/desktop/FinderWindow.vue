@@ -70,10 +70,11 @@ import { SITE } from '#shared/site'
 const router = useRouter()
 const store = useWindowsStore()
 
-const active = ref<'posts' | 'tags' | 'pages'>('posts')
+const active = ref<'posts' | 'worklog' | 'tags' | 'pages'>('posts')
 
 const sections = [
   { key: 'posts' as const, label: '文章列表', icon: 'doc' },
+  { key: 'worklog' as const, label: '工作日志', icon: 'note' },
   { key: 'tags' as const, label: '标签', icon: 'tag' },
   { key: 'pages' as const, label: '站点页面', icon: 'globe' },
 ]
@@ -86,6 +87,10 @@ const { data: posts } = await useAsyncData('finder-posts', () =>
 
 const { data: draftPosts } = await useAsyncData('finder-drafts', () =>
   queryCollection('blog').where('draft', '=', true).all(),
+)
+
+const { data: worklogs } = await useAsyncData('finder-worklogs', () =>
+  queryCollection('worklog').where('draft', '=', false).order('date', 'DESC').all(),
 )
 
 interface Row {
@@ -112,6 +117,22 @@ const postRows = computed<Row[]>(() => (posts.value ?? []).map(post => ({
     router.push(post.path)
   },
 })))
+
+const worklogRows = computed<Row[]>(() => (worklogs.value ?? []).map((log) => {
+  const pitfalls = log.pitfalls?.length ?? 0
+  const learned = log.learned?.length ?? 0
+  return {
+    key: log.path,
+    icon: 'note',
+    title: log.title,
+    subtitle: `${log.date} · ${pitfalls ? `${pitfalls} 个坑` : '没踩坑'} · ${learned} 条收获`,
+    badge: pitfalls ? `${pitfalls} 坑` : undefined,
+    action: () => {
+      close()
+      router.push(log.path)
+    },
+  }
+}))
 
 const tagRows = computed<Row[]>(() => {
   const map = new Map<string, number>()
@@ -143,6 +164,7 @@ const pageRows: Row[] = [
 ]
 
 const rows = computed(() => {
+  if (active.value === 'worklog') return worklogRows.value
   if (active.value === 'tags') return tagRows.value
   if (active.value === 'pages') return pageRows
   return postRows.value

@@ -23,7 +23,7 @@
     </div>
 
     <div class="shrink-0 border-t border-white/5 px-4 py-1.5 text-[11px] text-slate-500">
-      help · ls · cat &lt;slug&gt; · open &lt;路径&gt; · whoami · date · clear
+      help · ls · cat &lt;slug&gt; · log · open &lt;路径&gt; · whoami · date · clear
     </div>
   </div>
 </template>
@@ -39,6 +39,10 @@ const store = useWindowsStore()
 
 const { data: posts } = await useAsyncData('terminal-posts', () =>
   queryCollection('blog').where('draft', '=', false).select('title', 'path', 'date', 'description', 'category', 'tags').order('date', 'DESC').all(),
+)
+
+const { data: worklogs } = await useAsyncData('terminal-worklogs', () =>
+  queryCollection('worklog').where('draft', '=', false).order('date', 'DESC').all(),
 )
 
 const lines = ref<Line[]>([
@@ -88,6 +92,8 @@ function run() {
       print('  ls                列出全部文章')
       print('  ls tags           列出全部标签')
       print('  cat <slug>        查看文章摘要')
+      print('  log [条件]        工作日志：不带参数列最近 10 天；')
+      print('                    也可用编号 / 日期 / 关键词打开，如 log 2、log 09-17、log 光标')
       print('  open <路径>       跳转到页面，如 open /blog')
       print('  whoami            显示当前访客')
       print('  date              显示当前时间')
@@ -95,6 +101,64 @@ function run() {
       print('  echo <文本>       原样输出')
       print('  clear             清屏')
       break
+
+    case 'log': {
+      const logs = worklogs.value ?? []
+      if (!logs.length) { print('还没有日志', 'muted'); break }
+
+      const describe = (item: typeof logs[number]) => {
+        const count = item.pitfalls?.length ?? 0
+        return count ? `${count} 个坑` : '没踩坑'
+      }
+
+      // 不带参数：列为编号的最近 10 天（编号可直接用于 log <n>）
+      if (!arg) {
+        const head = logs.slice(0, 10)
+        print(`最近 ${head.length} 天（共 ${logs.length} 天）：`)
+        head.forEach((item, i) => {
+          print(`  ${String(i + 1).padStart(2, ' ')}. ${item.date}  ${item.title}  (${describe(item)})`)
+        })
+        print('用 log <编号|日期|关键词> 打开某一天 · log all 看全部', 'muted')
+        break
+      }
+
+      let target: (typeof logs)[number] | undefined
+
+      if (arg === 'all') {
+        print(`全部 ${logs.length} 天：`)
+        for (const item of logs) print(`  ${item.date}  ${item.title}  (${describe(item)})`)
+        print('用 log <编号|日期|关键词> 打开某一天', 'muted')
+        break
+      }
+
+      const index = Number(arg)
+      if (Number.isInteger(index) && index >= 1 && index <= logs.length) target = logs[index - 1]
+
+      // 日期：完整日期或 MM-DD 结尾都能匹配
+      if (!target) target = logs.find(item => String(item.date).endsWith(arg))
+
+      // 关键词：标题 / 标签 / 坑 / 收获
+      if (!target) {
+        const needle = arg.toLowerCase()
+        target = logs.find(item =>
+          item.title.toLowerCase().includes(needle)
+          || (item.tags ?? []).some(tag => tag.toLowerCase().includes(needle))
+          || (item.pitfalls ?? []).some(pitfall => `${pitfall.problem} ${pitfall.solution}`.toLowerCase().includes(needle))
+          || (item.learned ?? []).some(learned => learned.toLowerCase().includes(needle)),
+        )
+      }
+
+      if (!target) {
+        print(`没有找到日志：${arg}`, 'error')
+        print('用 log 看列表，或换一个关键词（如 log 光标、log Agent）', 'muted')
+        break
+      }
+
+      print(`打开 ${target.date} · ${target.title} …`, 'muted')
+      store.close('terminal')
+      router.push(target.path)
+      break
+    }
 
     case 'ls': {
       const list = posts.value ?? []

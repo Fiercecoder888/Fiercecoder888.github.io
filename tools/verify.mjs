@@ -88,6 +88,32 @@ async function checkPages() {
     }
   }
 
+  // 「汇总视图 → 日志原文」的出口体检（第 13 轮新增）
+  // 为什么不能只查 href="/worklog"：app/layouts/default.vue 的页脚本来就有个全局「工作日志」链接，
+  // 三个进度页里都跟着渲染出来了 —— 只查 href 的话，新加的「看日志原文 →」被谁删掉，断言照样绿，等于没加。
+  // 所以这里要求「带 data-progress-to-worklog 这个测试钩子的 <a>，且它的 href 正好是 /worklog」才算出口还在。
+  // 三页合起来算一条断言：任一页缺了就是失败，detail 里点名是哪一页。
+  try {
+    const exitPages = ['/progress', '/progress/pitfalls', '/progress/stats']
+    const missingExit = []
+    for (const path of exitPages) {
+      try {
+        const { status, text } = await req(path)
+        if (status !== 200) missingExit.push(`${path}（HTTP ${status}）`)
+        else {
+          const tag = text.match(/<a[^>]*data-progress-to-worklog[^>]*>/)?.[0] || ''
+          if (!tag.includes('href="/worklog"')) missingExit.push(path)
+        }
+      }
+      catch (error) { missingExit.push(`${path}（${error.message}）`) }
+    }
+    record('页面', '无限进步三页 → 日志原文出口', missingExit.length === 0 ? 'pass' : 'fail',
+      missingExit.length
+        ? `缺少「看日志原文」出口（<a href="/worklog" data-progress-to-worklog>）：${missingExit.join('、')}`
+        : '3/3 页含 href="/worklog" 的出口锚点')
+  }
+  catch (error) { record('页面', '无限进步三页 → 日志原文出口', 'fail', error.message) }
+
   // 文章详情：从 /blog 抓真实链接逐个验证
   try {
     const { text } = await req('/blog')

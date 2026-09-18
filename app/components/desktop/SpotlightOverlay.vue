@@ -13,7 +13,7 @@
             ref="input"
             v-model="query"
             type="text"
-            placeholder="搜索文章标题、正文…"
+            placeholder="搜索文章、工作日志（试试「坑」「光标」「Agent」）…"
             spellcheck="false"
             data-spotlight-input
             class="flex-1 bg-transparent text-base text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
@@ -48,6 +48,23 @@
                 <span class="block truncate text-[11px] text-slate-500">{{ post.date }} · {{ post.category ?? '未分类' }}</span>
               </span>
             </button>
+
+            <template v-if="recentLogs.length">
+              <p class="mt-4 text-[11px] uppercase tracking-widest text-slate-500">最近工作日志</p>
+              <button
+                v-for="log in recentLogs"
+                :key="log.id"
+                type="button"
+                class="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-white/5"
+                @click="go(log.path ?? log.id)"
+              >
+                <DesktopOsIcon name="note" class="mt-0.5 h-4 w-4 shrink-0 opacity-70" />
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm text-slate-700 dark:text-slate-200">{{ log.title }}</span>
+                  <span class="block truncate text-[11px] text-slate-500">工作日志 · 输入「坑」可以查所有踩坑记录</span>
+                </span>
+              </button>
+            </template>
           </div>
 
           <div v-else-if="!hits.length" class="px-3 py-6 text-center text-sm text-slate-500">
@@ -63,7 +80,7 @@
             @mousemove="activeIndex = index"
             @click="go(hit.path)"
           >
-            <DesktopOsIcon name="doc" class="mt-0.5 h-4 w-4 shrink-0 opacity-70" />
+            <DesktopOsIcon :name="hit.kind === 'worklog' ? 'note' : 'doc'" class="mt-0.5 h-4 w-4 shrink-0 opacity-70" />
             <span class="min-w-0 flex-1">
               <span class="flex items-baseline gap-2">
                 <span class="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{{ hit.title }}</span>
@@ -86,7 +103,7 @@
 <script setup lang="ts">
 const ui = useUiStore()
 const router = useRouter()
-const { sections, loading, error, ensureIndex, search } = useBlogSearch()
+const { sections, loading, error, ensureIndex, search, recentLogs } = useBlogSearch()
 const { settings } = useBlogSettings()
 
 const query = ref('')

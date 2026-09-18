@@ -98,6 +98,34 @@ async function pressKey(key, options = {}) {
   await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', ${init}))`)
 }
 
+/**
+ * 真实指针点击 + 命中测试（elementFromPoint）。
+ * 不能用 .click()：编程式点击会绕过命中测试，把「被别的层盖住」这类回归掩盖掉
+ * （本项目为这个坑付过一次代价，见 6.4 清空桌面那条）。
+ * locator 是一段返回目标元素的表达式字符串；返回 { hitSelf, coveredBy }。
+ */
+async function pointerClick(locator) {
+  return evaluate(`
+    (() => {
+      const el = (${locator})
+      if (!el) return { status: 'missing' }
+      const r = el.getBoundingClientRect()
+      const cx = Math.round(r.left + r.width / 2)
+      const cy = Math.round(r.top + r.height / 2)
+      const top = document.elementFromPoint(cx, cy)
+      const hitSelf = top === el || el.contains(top)
+      const opts = { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 0, pointerId: 7, pointerType: 'mouse', isPrimary: true }
+      const target = top || el
+      target.dispatchEvent(new PointerEvent('pointerdown', { ...opts, buttons: 1 }))
+      target.dispatchEvent(new MouseEvent('mousedown', { ...opts, buttons: 1 }))
+      target.dispatchEvent(new PointerEvent('pointerup', { ...opts, buttons: 0 }))
+      target.dispatchEvent(new MouseEvent('mouseup', { ...opts, buttons: 0 }))
+      target.dispatchEvent(new MouseEvent('click', { ...opts, buttons: 0 }))
+      return { status: 'clicked', hitSelf, coveredBy: hitSelf ? '' : (top?.className || top?.tagName || '').toString().slice(0, 50) }
+    })()
+  `)
+}
+
 async function waitForChrome() {
   for (let i = 0; i < 60; i++) {
     try {
@@ -218,6 +246,38 @@ async function main() {
 
   let searchHits = 0
   if (spotlightOpen) {
+    // 新入口①：工作日志也进了 Spotlight 索引。空查询状态下除了「最近文章」，
+    // 还应出现「最近工作日志」分组。
+    // 预算给到 45s：本机内容库冷启动要下载 844KB sqlite wasm，实测 10.5s、最坏 24.5s
+    // （见 docs/验收记录.md 的「15 秒假 404」轮次）—— 面板里若是「正在建立索引…」，
+    // 那是预算不够，不是缺陷；断言本身不因此放宽（分组不出现仍然判失败）。
+    let recentLogDiag = { ok: false, reason: 'not-run', panelText: '' }
+    const recentLogReady = await waitFor(async () => {
+      recentLogDiag = await evaluate(`
+        (() => {
+          const panel = document.querySelector('[data-spotlight]')
+          if (!panel) return { ok: false, reason: 'no-panel', panelText: '' }
+          const panelText = (panel.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 200)
+          const heading = [...panel.querySelectorAll('p')].find(p => (p.textContent || '').includes('最近工作日志'))
+          if (!heading) return { ok: false, reason: 'no-group', panelText }
+          const rows = []
+          for (let el = heading.nextElementSibling; el && el.tagName !== 'P'; el = el.nextElementSibling) {
+            const line = (el.innerText || '').replace(/\\s+/g, ' ').trim()
+            if (line) rows.push(line)
+          }
+          return { ok: true, rows, dated: rows.filter(t => /20\\d\\d-\\d\\d-\\d\\d/.test(t)).length, panelText }
+        })()
+      `)
+      return recentLogDiag.ok === true && recentLogDiag.dated > 0
+    }, 45000, 250)
+    record(
+      'Spotlight 空查询列出「最近工作日志」',
+      recentLogReady,
+      recentLogReady
+        ? `${recentLogDiag.dated} 条带日期，首条：${recentLogDiag.rows[0]?.slice(0, 60)}`
+        : `分组未就绪（${recentLogDiag.reason}）；面板文本：${recentLogDiag.panelText}`,
+    )
+
     await evaluate(`
       (() => {
         const input = document.querySelector('[data-spotlight-input]')
@@ -234,9 +294,60 @@ async function main() {
     await sleep(400)
     const closed = !(await exists('[data-spotlight]'))
     record('Spotlight Esc 关闭', closed, '')
+
+    // 新入口①的核心：日志的「坑」写在 frontmatter 里，只切正文的旧索引搜不到，
+    // 所以搜「坑」必须能搜出**带日期标签**的日志结果（结果行的标题是「日期 · 当天标题」，
+    // 小标题是「坑 · …」，标题里同时有日期和「坑」就说明命中的是日志而不是文章）。
+    await pressKey('k', { ctrlKey: true })
+    const spotlightAgain = await waitForElement('[data-spotlight]', 6000)
+    if (spotlightAgain) {
+      await evaluate(`
+        (() => {
+          const input = document.querySelector('[data-spotlight-input]')
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+          setter.call(input, '坑')
+          input.dispatchEvent(new Event('input', { bubbles: true }))
+        })()
+      `)
+      let pitfallDiag = { total: 0, dated: 0, pitRows: 0, sample: '', panelText: '' }
+      const pitfallHit = await waitFor(async () => {
+        pitfallDiag = await evaluate(`
+          (() => {
+            const panel = document.querySelector('[data-spotlight]')
+            if (!panel) return { total: 0, dated: 0, pitRows: 0, sample: '', panelText: '' }
+            const panelText = (panel.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 200)
+            const rows = [...panel.querySelectorAll('button')]
+              .map(b => (b.innerText || '').replace(/\\s+/g, ' ').trim())
+              .filter(Boolean)
+            // 日志切片行的固定形态：行首就是「日期 · 」——hit.title 是整行第一个文本节点
+            // （SpotlightOverlay.vue:86 的标题 span，日期在前），DOM 顺序保证它落在行首，
+            // 上一行的 trim 已去掉缩进。只判「行里出现过日期」会放过文章行（blog 6 篇全含日期串、
+            // 3 篇含「坑」，snippet 又是命中词前后约 110 字的窗口），存在假阳性。
+            const dated = rows.filter(t => /^20\\d\\d-\\d\\d-\\d\\d · /.test(t))
+            const pitRows = rows.filter(t => /^20\\d\\d-\\d\\d-\\d\\d · /.test(t) && t.includes('坑'))
+            return { total: rows.length, dated: dated.length, pitRows: pitRows.length, sample: (pitRows[0] || dated[0] || '').slice(0, 110), panelText }
+          })()
+        `)
+        return pitfallDiag.pitRows > 0
+      }, 45000, 300)
+      record(
+        'Spotlight 搜「坑」命中工作日志（行首日期 + 坑）',
+        pitfallHit,
+        pitfallHit
+          ? `结果 ${pitfallDiag.total} 条 / 行首即日期的日志行 ${pitfallDiag.dated} 条 / 其中踩坑 ${pitfallDiag.pitRows} 条 — ${pitfallDiag.sample}`
+          : `未命中（结果 ${pitfallDiag.total} 条 / 日志行 ${pitfallDiag.dated} 条）；面板文本：${pitfallDiag.panelText}`,
+      )
+      await pressKey('Escape')
+      await sleep(400)
+    }
+    else {
+      record('Spotlight 搜「坑」命中工作日志（行首日期 + 坑）', false, '第二次打开 Spotlight 失败')
+    }
   }
   else {
+    record('Spotlight 空查询列出「最近工作日志」', false, '未打开搜索')
     record('Spotlight 命中文章', false, '未打开搜索')
+    record('Spotlight 搜「坑」命中工作日志（行首日期 + 坑）', false, '未打开搜索')
   }
 
   /* ---------- 4. Launchpad（macOS 是从 Dock 打开） ---------- */
@@ -314,6 +425,34 @@ async function main() {
     record('终端 ls 输出文章列表', /共 \d+ 篇/.test(terminalOutput), terminalOutput.replace(/\s+/g, ' ').slice(0, 150))
     terminalOutput = await runTerminalCommand('whoami', /guest@/)
     record('终端 whoami 有输出', terminalOutput.includes('guest@'), '')
+
+    // 新入口③：终端 log 命令。
+    // 每条断言前先 clear（终端输出是累加的，清屏才能保证读到的是这条命令的结果）；
+    // 断言里再排掉上一条命令的痕迹（ls 的「共 N 篇」/ log 的「共 N 天」），防止清屏失效时
+    // 拿旧文本误判通过。
+    // 只跑不带参数 / 命中不了关键词的写法 —— `log <编号>` 会 push 到 /worklog/... 并关掉终端，
+    // 那会破坏同一脚本后面的拖动 / 缩放 / Finder / 主题等断言。
+    await runTerminalCommand('clear', /(?:)/)
+    terminalOutput = await runTerminalCommand('log', /共 \d+ 天/)
+    const logFresh = /共 \d+ 天/.test(terminalOutput) && !/共 \d+ 篇/.test(terminalOutput)
+    record(
+      '终端 log 列出工作日志（共 N 天）',
+      logFresh && /20\d\d-\d\d-\d\d/.test(terminalOutput),
+      `${logFresh ? '' : '没读到本条命令的输出（清屏没生效？）；'}${terminalOutput.replace(/\s+/g, ' ').slice(0, 140)}`,
+    )
+
+    await runTerminalCommand('clear', /(?:)/)
+    terminalOutput = await runTerminalCommand('log zzz-不存在的关键词-zzz', /没有找到日志/)
+    const missFresh = /没有找到日志/.test(terminalOutput) && !/共 \d+ 天/.test(terminalOutput)
+    const terminalStillOpen = await exists('[data-window="terminal"]')
+    record(
+      '终端 log 未命中关键词给提示（不静默）',
+      missFresh && terminalStillOpen,
+      `${missFresh ? '' : '没读到本条命令的输出（清屏没生效？）；'}${terminalStillOpen ? '' : '终端被关掉；'}${terminalOutput.replace(/\s+/g, ' ').slice(0, 120)}`,
+    )
+    // `log <编号>` 会 push 到 /worklog/... 并关掉窗口；这条断言守住「未命中的查询不会把人带走」，
+    // 同时保证同一脚本后面的拖动 / 缩放 / Finder / 主题等断言还有桌面可用。
+    record('终端 log 未命中不离开桌面', await exists('[data-desktop-surface]'), '')
   }
 
   if (terminalAppeared) {
@@ -368,6 +507,32 @@ async function main() {
     finderText = await text('[data-window="finder"]')
   }
   record('Finder 列出文章', finderAppeared && /项/.test(finderText), finderText.replace(/\s+/g, ' ').slice(0, 90))
+
+  // 新入口②：Finder 侧栏新增「工作日志」位置。
+  // 点侧栏用真实指针序列 + 命中测试（elementFromPoint），不用 .click()；
+  // 列表特征按结构断言（「N 个坑 / 没踩坑」+「N 条收获」），不写死某一天的文案。
+  let worklogSectionText = ''
+  if (finderAppeared) {
+    const sidebarHit = await pointerClick(
+      `[...document.querySelectorAll('[data-window="finder"] aside button')].find(b => (b.textContent || '').replace(/\\s+/g, '') === '工作日志')`,
+    )
+    const worklogListed = sidebarHit.hitSelf === true && await waitFor(async () => {
+      worklogSectionText = await text('[data-window="finder"]')
+      return /个坑|没踩坑/.test(worklogSectionText) && /条收获/.test(worklogSectionText)
+    }, 15000, 250)
+    record(
+      'Finder 侧栏「工作日志」列出日志（命中测试通过）',
+      worklogListed,
+      sidebarHit.status === 'missing'
+        ? '侧栏里没有「工作日志」按钮'
+        : sidebarHit.hitSelf !== true
+          ? `侧栏按钮被「${sidebarHit.coveredBy}」盖住`
+          : worklogSectionText.replace(/\s+/g, ' ').slice(0, 120),
+    )
+  }
+  else {
+    record('Finder 侧栏「工作日志」列出日志（命中测试通过）', false, 'Finder 未打开')
+  }
 
   const topWindow = await evaluate(`
     (() => {
