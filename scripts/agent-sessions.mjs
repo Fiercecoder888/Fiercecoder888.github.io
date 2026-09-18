@@ -481,8 +481,13 @@ const DSH_DEFAULT_DIR = () => join(homedir(), '.dsh', 'sessions')
 const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
 const DSH_EDIT_TOOLS = /^(write|edit|multi_edit|apply_patch|notebook_edit)$/i
 
-/** 扫描 zstd 帧边界：DSH 是一帧一条记录追加写的 */
-function zstdFrameOffsets(buffer) {
+/**
+ * 扫描 zstd 帧边界：DSH 是一帧一条记录追加写的。
+ *
+ * **导出给 scripts/mine-history.mjs 复用**：`zlib.zstdDecompressSync` 只解第一帧就返回，
+ * 必须按魔数逐帧解才能读全 —— 这个坑踩过一次，不要在两处各写一份实现。
+ */
+export function zstdFrameOffsets(buffer) {
   const offsets = []
   let from = 0
   for (;;) {

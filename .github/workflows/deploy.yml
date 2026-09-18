@@ -52,6 +52,12 @@ jobs:
       - name: Check no drafts in content
         run: pnpm check:drafts
 
+      # 泄露守卫：content/worklog 会直接发布到公开网站，工作日志又天然贴着工作项目写，
+      # 很容易带出公司/客户/项目代号、内网地址、真实路径、密钥。这条在构建前拦住。
+      # （`new-log.mjs --publish` 是把草稿直接移进 content/ 的，不走其它守卫，所以 CI 这道是必要的兜底）
+      - name: Check no secrets in worklog
+        run: pnpm check:leaks
+
       - name: Generate static site
         run: pnpm generate
         env:

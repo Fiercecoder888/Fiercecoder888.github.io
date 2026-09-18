@@ -13,6 +13,8 @@
     "qa:static": "node tools/qa.mjs --base http://127.0.0.1:4180",
     "assets:check": "node tools/asset-check.mjs",
     "check:drafts": "node scripts/check-drafts.mjs",
+    "check:leaks": "node scripts/check-worklog-secrets.mjs",
+    "mine:history": "node scripts/mine-history.mjs",
     "new:log": "node scripts/new-log.mjs",
     "postinstall": "node scripts/install-sqlite-prebuild.mjs && nuxt prepare"
   },
