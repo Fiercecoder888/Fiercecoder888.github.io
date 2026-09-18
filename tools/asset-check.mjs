@@ -3,14 +3,14 @@
  * 检查站点 HTML 里引用的所有本地静态资源是否都能取到（重点：/_nuxt/ 下的 chunk）。
  * 静态托管上只要有 chunk 404，按需加载的组件会静默失效，页面却看着正常。
  *
- * 用法: node tools/asset-check.mjs https://example.github.io [更多页面路径...]
+ * 用法: node tools/asset-check.mjs [baseUrl] [更多页面路径...]
+ *   baseUrl 省略（或第一个参数不是 http(s) 地址）时默认打本地静态产物
+ *   http://127.0.0.1:4180，这样 `pnpm assets:check` 配 `pnpm serve:static` 直接可用。
  */
-const base = (process.argv[2] || '').replace(/\/$/, '')
-if (!base) {
-  console.error('用法: node tools/asset-check.mjs <baseUrl> [路径...]')
-  process.exit(1)
-}
-const pages = process.argv.slice(3)
+const args = process.argv.slice(2)
+const hasBase = Boolean(args[0]) && /^https?:\/\//.test(args[0])
+const base = (hasBase ? args[0] : 'http://127.0.0.1:4180').replace(/\/$/, '')
+const pages = args.slice(hasBase ? 1 : 0)
 const paths = pages.length ? pages : ['/', '/blog', '/about', '/tags']
 
 const seen = new Map() // url -> Set(来源页面)
