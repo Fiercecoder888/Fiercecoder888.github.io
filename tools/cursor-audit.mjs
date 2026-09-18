@@ -7,7 +7,12 @@
  *   2. **热点错位** —— SVG 光标不带 hotspot 时浏览器把热点定在图片左上角 (0,0)，
  *      而图形本身不是从左上角起笔的，于是「看得见的指尖」和「真正的点击点」错开，
  *      手感就是「不灵敏 / 点不准」。
- * 本工具查第 1 类（第 2 类见 scripts/cursor-hotspots.mjs）。
+ * 本工具查第 1 类，并顺带守住第 2 类的**回归**：自定义光标只要没写热点坐标就判失败
+ * （坐标该怎么量见 scripts/cursor-hotspots.mjs）。
+ *
+ * 判定用的是**目标元素自己**的 `getComputedStyle(el).cursor`，不是探针点上那个元素的：
+ * 用点上元素会把「点在视口外 / 被别的元素盖住 / 该状态下元素本就不存在」误报成光标规则缺失。
+ * 覆盖情况只作为提示打印，不参与判定。
  *
  * 用法：
  *   node tools/cursor-audit.mjs                              # 打本地 .output 产物
@@ -41,7 +46,9 @@ const evaluate = async (expression) => {
 }
 const sleep = ms => new Promise(s => setTimeout(s, ms))
 
-/** 要巡检的位置：选择器 + 用元素的哪个点去问 */
+/** 要巡检的位置：选择器 + 用元素的哪个点去问 + 期望语义
+ *  mode='center' 时判「该元素自身的 cursor」；其余 mode 是**点的命中测试**
+ *  （图标之间的空隙、顶栏空白、桌面空白 —— 这些问的是「这里会不会冒出不该有的光标」）。 */
 const TARGETS = [
   ['Dock 图标中心', '[data-dock-item="finder"]', 'center', 'pointer'],
   ['Dock 图标之间的空隙', '[data-dock-item="finder"]', 'gapRight', 'default'],
@@ -108,11 +115,22 @@ try {
         let x, y
         if (mode === 'center') { x = r.left + r.width / 2; y = r.top + r.height / 2 }
         else if (mode === 'gapRight') { x = r.right + 6; y = r.top + r.height / 2 }
-        else if (mode === 'edge') { x = r.left + 2; y = r.top + 2 }
+        // edge：取「底部内边距带」的中点。不要用 (left+2, top+2) —— Dock 的圆角有 1.2rem，
+        // 左上角那个点根本不在 Dock 形状里，elementFromPoint 会穿透到底下的窗口去（实测命中文章里的 span.line）。
+        else if (mode === 'edge') { x = r.left + r.width / 2; y = r.bottom - 3 }
         else { x = innerWidth - 60; y = innerHeight / 2 }   // blank：右侧空白壁纸
-        const hit = (x >= 0 && x <= innerWidth && y >= 0 && y <= innerHeight) ? document.elementFromPoint(x, y) : null
-        const cursor = hit ? getComputedStyle(hit).cursor : '(点不在视口内)'
-        out.push({ name, sel, x: Math.round(x), y: Math.round(y), hit: describe(hit), cursor })
+        const inView = x >= 0 && x <= innerWidth && y >= 0 && y <= innerHeight
+        const hit = inView ? document.elementFromPoint(x, y) : null
+        // 判定用的是**目标元素自己**的 cursor（继承/层叠都算进去），不是点上那个元素的：
+        // 用点上元素会让「点在视口外」「被别的元素盖住」这类探针问题被误报成光标规则缺失。
+        out.push({
+          name, sel, x: Math.round(x), y: Math.round(y),
+          own: getComputedStyle(el).cursor,
+          hitCursor: hit ? getComputedStyle(hit).cursor : '',
+          inView,
+          hit: describe(hit),
+          covered: Boolean(hit) && hit !== el && !el.contains(hit) && !hit.contains(el),
+        })
       }
       return out
     })()
@@ -124,35 +142,45 @@ try {
   for (let i = 0; i < TARGETS.length; i++) {
     const expect = TARGETS[i][3]
     const r = result?.[i] || { name: TARGETS[i][0], missing: true }
-    if (r.missing) { rows.push({ ...r, ok: false, note: `找不到元素 ${r.sel}` }); continue }
+    if (r.missing) { rows.push({ ...r, skip: true, note: `页面上没有 ${r.sel}（该状态下本就不存在，跳过）` }); continue }
+    if (!r.inView) { rows.push({ ...r, skip: true, note: '探针点不在视口内，跳过判定' }); continue }
+    // 点命中类目标判「点上那个元素」的光标，其余判目标元素自身
+    const pointMode = TARGETS[i][2] !== 'center'
+    const cursor = String((pointMode ? r.hitCursor : r.own) || '')
     // 自定义光标：'url("...svg") 3 2, pointer' —— 取最后那个关键字判断语义
-    const kw = String(r.cursor).split(',').pop().trim()
-    const isCustom = String(r.cursor).includes('url(')
+    const kw = cursor.split(',').pop().trim()
+    const isCustom = cursor.includes('url(')
     let ok
     if (expect === 'default') ok = kw === 'auto' || kw === 'default'
     else if (expect === 'resize') ok = /resize/.test(kw)
     else ok = kw === expect
     // 自定义光标必须带热点坐标，否则浏览器按 (0,0) 取锚点 → 指尖和触发点错开（手感「不灵敏」）
-    const hotspot = /url\([^)]*\)\s+(-?\d+)\s+(-?\d+)/.exec(String(r.cursor))
+    const hotspot = /url\([^)]*\)\s+(-?\d+)\s+(-?\d+)/.exec(cursor)
+    const note = (!pointMode && r.covered) ? `该点被 ${r.hit} 覆盖（只影响命中测试，不影响规则判定）` : ''
     if (ok && isCustom && !hotspot) {
-      ok = false
-      rows.push({ ...r, kw, isCustom, expect, ok, note: '自定义光标没写热点坐标 → 浏览器按 (0,0) 取锚点，指尖会偏' })
+      rows.push({ ...r, kw, isCustom, expect, ok: false, note: '自定义光标没写热点坐标 → 浏览器按 (0,0) 取锚点，指尖会偏' })
       continue
     }
-    rows.push({ ...r, kw, isCustom, expect, ok, hotspot: hotspot ? `${hotspot[1]} ${hotspot[2]}` : '', note: '' })
+    rows.push({ ...r, kw, isCustom, expect, ok, hotspot: hotspot ? `${hotspot[1]} ${hotspot[2]}` : '', note, byPoint: pointMode })
   }
 
   for (const r of rows) {
-    console.log(`  ${r.ok ? '✔' : '✘'} ${String(r.name).padEnd(22)} ${String(r.kw || '-').padEnd(12)} ${r.isCustom ? `[自定义光标 热点 ${r.hotspot || '缺失'}]` : '[系统默认]'}  命中 ${r.hit}`)
-    if (!r.ok) console.log(`      期望 ${r.expect}${r.note ? ' — ' + r.note : ''}`)
+    const mark = r.skip ? '·' : (r.ok ? '✔' : '✘')
+    const scope = r.byPoint ? '点上' : '元素'
+    console.log(`  ${mark} ${String(r.name).padEnd(22)} ${String(r.kw || '-').padEnd(12)} ${r.isCustom ? `[自定义光标 热点 ${r.hotspot || '缺失'}]` : '[系统默认]'}  ${r.skip ? '' : `判${scope} `}命中 ${r.hit}`)
+    if (!r.ok && !r.skip) console.log(`      期望 ${r.expect}${r.note ? ' — ' + r.note : ''}`)
+    else if (r.skip || r.note) console.log(`      ${r.note}`)
   }
-  const bad = rows.filter(r => !r.ok)
+  const bad = rows.filter(r => !r.ok && !r.skip)
+  const skipped = rows.filter(r => r.skip).length
   console.log('')
-  console.log(bad.length ? `✘ ${bad.length} / ${rows.length} 处不符合预期` : `✔ ${rows.length} 处全部符合预期`)
+  console.log(bad.length
+    ? `✘ ${bad.length} / ${rows.length} 处不符合预期${skipped ? `（另有 ${skipped} 处跳过）` : ''}`
+    : `✔ ${rows.length - skipped} 处全部符合预期${skipped ? `（另有 ${skipped} 处跳过）` : ''}`)
 
   if (VERBOSE) {
     console.log('\n完整光标值：')
-    for (const r of rows) console.log(`  ${String(r.name).padEnd(22)} ${r.cursor}`)
+    for (const r of rows) console.log(`  ${String(r.name).padEnd(22)} ${r.own || '-'}`)
   }
   process.exitCode = bad.length ? 1 : 0
 } finally {
