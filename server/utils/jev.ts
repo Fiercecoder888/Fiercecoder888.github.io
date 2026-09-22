@@ -217,10 +217,20 @@ export async function askJev(
  * 把 Jev 的状态码翻成人话。
  * 关键的一条：`401` 是**服务端 key 的问题**，不是访客的问题 ——
  * 说得含糊会让人去查前端请求头，方向就错了。
+ *
+ * 而 `401` 本身还要分清**跑在哪**：本地开发读的是站点根目录的 `.env`，
+ * 线上（Netlify 函数）读的是平台的环境变量。原先这里只写了 `.env`，
+ * 于是在线上看到提示的人会去改一个根本不存在的文件 —— 两个位置都点出来。
  */
 function describeStatus(status: number, detail: string): string {
   const suffix = detail ? `（${detail.slice(0, 200)}）` : ''
-  if (status === 401) return `服务端 API key 无效或已失效，检查 .env 里的 NUXT_TYPESAFE_API_KEY${suffix}`
+  if (status === 401) {
+    return '服务端持有的 API key 被 Jev 拒绝（401）。'
+      + '本地开发查站点根目录 .env 的 NUXT_TYPESAFE_API_KEY；'
+      + '线上查部署平台的环境变量 TYPESAFE_API_KEY —— 值必须是 key 本身，'
+      + '不要带引号、不要带 `变量名=` 前缀、不要有多余空格'
+      + suffix
+  }
   if (status === 422) return `请求体没通过 Jev 校验，多半是某个问题的形状不对${suffix}`
   if (status === 429) return `TypeSafe 限流了（429），已经退避重试仍失败，过一会儿再来${suffix}`
   if (status === 529) return `TypeSafe 暂时过载（529），已经退避重试仍失败，过一会儿再来${suffix}`
