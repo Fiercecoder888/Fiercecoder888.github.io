@@ -75,6 +75,16 @@ export const APPS: AppDef[] = [
     dockBreakBefore: true,
   },
   {
+    // Jev 决策台 = TypeSafe System One 模型的可视化入口（问一组类型化问题 → 拿结构化答案）。
+    // 图标复用 appstore（app-icons 里没有「问询/决策」类的图），语义上对应「试一个新模型」。
+    // 注意它**只在本地 `pnpm dev` 下有用**：静态站上没有 server/api，而 key 不能进浏览器。
+    id: 'jev',
+    name: 'Jev 决策台',
+    icon: '/app-icons/appstore/128.png',
+    kind: 'window',
+    inDock: true,
+  },
+  {
     id: 'settings',
     name: '系统设置',
     icon: '/app-icons/system-preferences/128.png',

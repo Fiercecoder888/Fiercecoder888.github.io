@@ -14,6 +14,7 @@
         <DesktopAboutWindow v-else-if="win.id === 'about'" />
         <DesktopTrashWindow v-else-if="win.id === 'trash'" />
         <DesktopWallpaperWindow v-else-if="win.id === 'wallpaper'" />
+        <DesktopJevWindow v-else-if="win.id === 'jev'" />
       </DesktopAppWindow>
     </div>
 

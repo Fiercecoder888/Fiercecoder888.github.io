@@ -18,9 +18,47 @@ export default defineNuxtConfig({
 
   vite: {
     plugins: [tailwindcss()],
+
+    // ── Windows 上 dev server 被 EBUSY 打死的那道防护 ──────────────────────
+    // 症状（已实测复现）：用 AI 编码工具改 `app/` 下的文件时，工具会在被改文件**旁边**
+    // 生成一个临时目录 `.<name>.<pid>.<uuid>.tmpdir/`，里面放 `.tmp` 文件。Windows 上
+    // chokidar 的原生 fs 监听会把这个瞬时目录当成待监听文件，抛出
+    //   ERROR [unhandledRejection] EBUSY: resource busy or locked, watch '...tmpdir\xxx.tmp'
+    // **整个 dev server 当场终止** —— 不是某个请求失败，是进程没了。
+    //
+    // 同一个坑在 FactoryBrain 仓库已经踩过并修好（那边 vite.config.ts 有同样的注释）。
+    // 那边额外上了 `usePolling: true, interval: 300`；这里先只做「排除」，因为轮询会让
+    // 监听成本明显上升。若哪天 EBUSY 仍然复现，再加 usePolling 那两行。
+    //
+    // 注意：给 `ignored` 传数组会**覆盖** Vite 的默认排除项，所以默认的几项必须自己写回来，
+    // 否则 node_modules 会被纳入监听 —— 那比 EBUSY 更糟。
+    server: {
+      watch: {
+        ignored: [
+          '**/.git/**',
+          '**/node_modules/**',
+          '**/.nuxt/**',
+          '**/.output/**',
+          '**/*.tmpdir/**',
+          '**/*.tmp',
+        ],
+      },
+    },
   },
 
   // 站点信息：部署时用环境变量 NUXT_PUBLIC_SITE_URL 覆盖，本地用 shared/site.ts 的 url
+  //
+  // 这里**故意不声明** Jev（TypeSafe）那组配置，尽管声明成私有 runtimeConfig 看起来更「Nuxt」。
+  // 理由是实测出来的：`nuxt dev` 里 dotenv 加载 `.env` 的时机晚于 Nitro 应用 `NUXT_*`
+  // 运行时覆盖，于是 `process.env.NUXT_TYPESAFE_API_KEY` 有值、而
+  // `useRuntimeConfig(event).typesafeApiKey` 是空串 —— 接口报「没读到 key」，
+  // 但你去查环境变量明明有，很难归因。所以 server/utils/jev.ts::readJevConfig()
+  // 在**请求时**直接读 process.env，顺带保证 key 不会被烤进任何产物。
+  //
+  // 三个变量名（都只在服务端用，**都不要加 NUXT_PUBLIC_ 前缀**）：
+  //   NUXT_TYPESAFE_API_KEY   Jev 的 API key（放站点根目录 .env，已被 .gitignore 忽略）
+  //   NUXT_TYPESAFE_BASE_URL  默认 https://api.typesafe.ai
+  //   NUXT_TYPESAFE_MODEL     默认 jev-latest
   runtimeConfig: {
     public: {
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || SITE.url,

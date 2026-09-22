@@ -27,6 +27,8 @@ const REGISTRY: Omit<WindowState, 'isOpen' | 'isMinimize' | 'isMaximized' | 'zIn
   { id: 'about', title: '关于本站', width: 460, height: 420 },
   { id: 'trash', title: '废纸篓', width: 620, height: 420 },
   { id: 'wallpaper', title: '壁纸', width: 660, height: 560 },
+  // Jev 决策台：左右两栏，所以默认开得比别的窗口宽一些
+  { id: 'jev', title: 'Jev 决策台', width: 880, height: 700 },
 ]
 
 function createWindows(): Record<string, WindowState> {
