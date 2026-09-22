@@ -20,6 +20,19 @@
         填入示例
       </button>
 
+      <button
+        v-if="answers"
+        type="button"
+        class="rounded-md border px-2.5 py-1 text-xs transition"
+        :class="copied
+          ? 'border-emerald-400/40 text-emerald-300'
+          : 'border-white/10 text-slate-400 hover:border-white/20 hover:text-slate-200'"
+        title="把整份结论复制成纯文本"
+        @click="copyResult"
+      >
+        {{ copied ? '已复制 ✓' : '复制结论' }}
+      </button>
+
       <span v-if="elapsed !== null" class="text-[11px] text-slate-500">
         {{ elapsed }} ms
       </span>
@@ -163,19 +176,26 @@
           </div>
 
           <!-- noul：可选的是/否判据 -->
-          <div v-else class="mt-2 grid grid-cols-2 gap-1">
-            <input
-              v-model="q.criteriaTrue"
-              spellcheck="false"
-              class="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[11px] text-slate-300 outline-none focus:border-blue-400/50"
-              placeholder="（可选）算「是」的情形"
-            >
-            <input
-              v-model="q.criteriaFalse"
-              spellcheck="false"
-              class="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[11px] text-slate-300 outline-none focus:border-blue-400/50"
-              placeholder="（可选）算「否」的情形"
-            >
+          <div v-else class="mt-2 space-y-1">
+            <div class="grid grid-cols-2 gap-1">
+              <input
+                v-model="q.criteriaTrue"
+                spellcheck="false"
+                class="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[11px] text-slate-300 outline-none focus:border-blue-400/50"
+                placeholder="（可选）算「是」的情形"
+              >
+              <input
+                v-model="q.criteriaFalse"
+                spellcheck="false"
+                class="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[11px] text-slate-300 outline-none focus:border-blue-400/50"
+                placeholder="（可选）算「否」的情形"
+              >
+            </div>
+            <p class="text-[10px] leading-relaxed text-slate-500">
+              noul 只给一个 0~1 的数 —— <strong class="font-medium text-slate-400">没有概率分布、也没有置信度</strong>，
+              所以数字可不可信你无从判断。想看得更多（各选项概率 + 把握度）请改用
+              <strong class="font-medium text-slate-400">choice</strong>。
+            </p>
           </div>
         </section>
 
@@ -199,18 +219,45 @@
           按「运行」把左边这些问题发给 Jev。
         </p>
 
+        <!-- 输入改了但没重新运行 —— 不提示的话，旧结果看起来就像"当前输入的答案"。
+             这个坑真实踩过：当时的排查方式是拿 token 数反推才发现的。 -->
+        <p
+          v-if="stale"
+          class="rounded-md border border-amber-400/30 bg-amber-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-amber-200"
+          data-jev-stale
+        >
+          输入已经改过了，下面是<strong class="font-medium">上一次</strong>的结果 —— 点「运行」重新评估。
+        </p>
+
         <section v-for="(answer, key) in answers" :key="key" class="rounded-md border border-white/10 bg-white/[0.03] p-2.5">
-          <div class="mb-2 flex items-baseline gap-2">
+          <div class="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <span class="font-mono text-[11px] text-slate-400">{{ key }}</span>
-            <span class="text-lg font-semibold text-slate-100">{{ headline(answer) }}</span>
+            <span class="text-xl font-semibold text-slate-100">{{ headline(answer) }}</span>
+
+            <!-- 把握度：百分比 + 一句判断。裸的 `0.37` 没人知道算高还是低；
+                 「把握 37% · 存疑」不用学任何概念就能决定该不该信。 -->
             <span
               v-if="answer.confidence !== undefined"
-              class="ml-auto rounded-full px-2 py-0.5 text-[10px]"
-              :class="confidenceClass(answer.confidence)"
+              class="ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium"
+              :class="verdictOf(answer.confidence).cls"
+              :title="`confidence = ${answer.confidence}；最高概率项占 ${(topProbability(answer) * 100).toFixed(1)}%`"
             >
-              置信 {{ Number(answer.confidence).toFixed(2) }}
+              把握 {{ verdictOf(answer.confidence).pct }}% · {{ verdictOf(answer.confidence).text }}
+            </span>
+            <!-- noul 不返回 confidence —— 明说，别让人以为界面漏显示了 -->
+            <span
+              v-else
+              class="ml-auto rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-slate-500"
+              title="noul 的答案只有 0~1 一个数，API 不返回 confidence"
+            >
+              noul · 不给置信度
             </span>
           </div>
+
+          <!-- 一句人话的结论。只显示 `technical` 等于没说 —— 用户得回头对照自己写的选项 -->
+          <p v-if="conclusionOf(answer, key)" class="mb-2 text-xs leading-relaxed text-slate-300">
+            {{ conclusionOf(answer, key) }}
+          </p>
 
           <!-- choice：每个选项一条概率条 -->
           <div v-if="answer.probabilities" class="space-y-1">
@@ -349,6 +396,21 @@ const elapsed = ref<number | null>(null)
 
 const cost = computed(() => ((usage.value.input_tokens ?? 0) / 1_000_000 * 0.042).toFixed(6))
 
+/**
+ * 「结果是不是已经过期了」。
+ *
+ * 真实踩过的坑：改了 state 或问题，但**没有再点一次「运行」**，右侧却还显示着上一次的
+ * 结果 —— 看起来完全像"当前输入的答案"。当时的排查方式是拿 token 数反推才发现的
+ * （输入改了但 tokens 没变，说明发出去的不是屏幕上这份）。
+ *
+ * 判据用**点「运行」那一刻**的快照，而不是"当前输入变了没有"：如果请求发出后用户继续
+ * 打字，那份结果对应的仍是发出时的那份输入，标成过期是对的。
+ */
+const ranSnapshot = ref<string | null>(null)
+const inputSnapshot = computed(() => JSON.stringify({ state: state.value, questions: questions.value }))
+const stale = computed(() => answers.value !== null && ranSnapshot.value !== null
+  && ranSnapshot.value !== inputSnapshot.value)
+
 /** 草稿持久化：窗口关闭会卸载组件，不存盘就等于每次重打一遍 */
 function persist() {
   if (import.meta.server) return
@@ -445,6 +507,8 @@ async function run() {
   loading.value = true
   elapsed.value = null
   const startedAt = Date.now()
+  // 记下发出去的是哪一份输入 —— 用来判断结果有没有过期（见 ranSnapshot 的说明）
+  const sent = inputSnapshot.value
 
   try {
     const res = await $fetch<{ code: number, message: string, data: AskResponse }>(endpoint, {
@@ -456,13 +520,14 @@ async function run() {
     answers.value = res.data.answers
     raw.value = JSON.stringify(res.data, null, 2)
     elapsed.value = Date.now() - startedAt
+    ranSnapshot.value = sent
   }
   catch (err) {
     const e = err as { statusCode?: number, data?: { message?: string } }
     // 线上还没配 JEV_API_BASE 时 endpoint 是 '/api/jev/ask'，静态站上必然 404。
     // 给一句能照做的提示，而不是把框架的报错直接甩出来。
     error.value = e?.statusCode === 404
-      ? '这个站上还没有后端：把 jev-api.ts 部署到 Deno Deploy，并把地址填进仓库变量 JEV_API_BASE（详见 docs/工作日志.md 旁的交接说明）'
+      ? '这个站上还没有后端：把仓库根目录的 jev-api.ts 经 netlify/functions/jev-api.ts 部署到 Netlify，并把站点地址填进 GitHub 仓库变量 JEV_API_BASE'
       : (e?.data?.message || (err as Error).message || '调用失败')
   }
   finally {
@@ -470,13 +535,85 @@ async function run() {
   }
 }
 
+/* ── 把结论复制走 ─────────────────────────────────────── */
+
+const copied = ref(false)
+
+/** 拼成纯文本，能直接粘进聊天/笔记 —— 省得用户自己截图或手抄数字 */
+function summaryText(): string {
+  const lines: string[] = [`Jev 决策台 · ${model.value}`]
+  lines.push(`state: ${state.value.replace(/\s+/g, ' ').slice(0, 120)}`)
+  lines.push('')
+
+  for (const [key, answer] of Object.entries(answers.value ?? {})) {
+    const verdict = answer.confidence === undefined ? null : verdictOf(answer.confidence)
+    const conf = verdict ? `把握 ${verdict.pct}%（${verdict.text}）` : 'noul 不提供置信度'
+    lines.push(`${key}: ${headline(answer)}    ${conf}`)
+
+    const what = conclusionOf(answer, key)
+    if (what) lines.push(`    ${what}`)
+
+    if (answer.probabilities) {
+      for (const [name, p] of Object.entries(sortedProbabilities(answer, key))) {
+        lines.push(`    ${barLabel(answer, name)}  ${p.toFixed(3)}`)
+      }
+    }
+  }
+
+  if (elapsed.value !== null) {
+    lines.push('', `耗时 ${elapsed.value} ms · ${usage.value.input_tokens ?? 0} in tok · ≈ $${cost.value}`)
+  }
+  return lines.join('\n')
+}
+
+async function copyResult() {
+  try {
+    await navigator.clipboard.writeText(summaryText())
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 1600)
+  }
+  catch {
+    // 剪贴板要 https 或用户授权；失败时给一句人话，别静默什么都不发生
+    error.value = '复制失败：浏览器没允许访问剪贴板（需要 https 或手动授权）'
+  }
+}
+
 /* ── 结果渲染 ─────────────────────────────────────────── */
+
+/**
+ * score 的档位数：legend 的键数就是档位数。
+ * 显示成「1 / 2」比显示「1.05」直观得多 —— 后者要用户自己知道满分是几。
+ */
+function scoreMax(answer: Answer): string {
+  const n = Object.keys(answer.legend ?? {}).length
+  return n ? String(n - 1) : '?'
+}
 
 function headline(answer: Answer): string {
   if (answer.type === 'noul') return Number(answer.noul).toFixed(3)
   if (answer.type === 'choice') return answer.choice ?? '—'
-  if (answer.type === 'score') return `${answer.score} / ${(Object.keys(answer.legend ?? {}).length - 1) || '?'}`
+  if (answer.type === 'score') return `${answer.score} / ${scoreMax(answer)}`
   return '—'
+}
+
+/**
+ * 把结论说成一句人话。
+ * 只显示 `technical` 等于没说 —— 用户得回头去对照自己写的那三个选项才明白是什么意思。
+ * choice 的说明是我们自己传的 criteria，从左边那份定义里取回来，不必让 API 回传。
+ */
+function conclusionOf(answer: Answer, key: string): string {
+  if (answer.type === 'choice' && answer.choice) return optionDescription(key, answer.choice)
+  if (answer.type === 'score') {
+    // score 落在两档之间是正常的（概率加权），取概率最高的那一档作为"最接近的档位"
+    const top = Object.entries(answer.probabilities ?? {}).sort((a, b) => b[1] - a[1])[0]
+    return top ? `最接近「${answer.legend?.[top[0]] ?? top[0]}」` : ''
+  }
+  return ''
+}
+
+function optionDescription(key: string, optionName: string): string {
+  const q = questions.value.find(item => (item.id.trim() || `q${item.uid}`) === key)
+  return q?.options.find(o => o.key.trim() === optionName)?.desc?.trim() || ''
 }
 
 /** 概率从高到低 —— 排序本身就是信息，比 API 返回的键序好读 */
@@ -506,11 +643,23 @@ function barLabel(answer: Answer, name: string): string {
 
 /**
  * confidence 是「该不该信这个答案」的第二根轴（官方 confidence-gated routing 模式）。
- * 0.9 以上可以自动处置，往下就该转人工 —— 所以这里用颜色把分界线画出来。
+ *
+ * 显示成**百分比 + 一句判断**，而不是裸的 `0.37`：裸数字要用户自己知道 0.37 算高还是低。
+ * 「把握 x%」这个说法是看了一个做得很直观的同类界面后改的 —— 它把
+ * `confidence` 直接翻成「把握 38%」，读者不用学任何概念就能判断该不该信。
+ *
+ * 三档的分界线就是"自动处置 / 需要留意 / 该转人工"。
  */
-function confidenceClass(confidence: number): string {
-  if (confidence >= 0.9) return 'bg-emerald-500/15 text-emerald-300'
-  if (confidence >= 0.7) return 'bg-amber-500/15 text-amber-300'
-  return 'bg-rose-500/15 text-rose-300'
+function verdictOf(confidence: number): { pct: number, text: string, cls: string } {
+  const pct = Math.round(confidence * 100)
+  if (confidence >= 0.9) return { pct, text: '很确定', cls: 'bg-emerald-500/15 text-emerald-300' }
+  if (confidence >= 0.7) return { pct, text: '大致确定', cls: 'bg-amber-500/15 text-amber-300' }
+  return { pct, text: '存疑 · 建议人工确认', cls: 'bg-rose-500/15 text-rose-300' }
+}
+
+/** 最高概率那一项的占比 —— "赢了多少"，和 confidence 不是一回事（后者看分布陡不陡） */
+function topProbability(answer: Answer): number {
+  const values = Object.values(answer.probabilities ?? {})
+  return values.length ? Math.max(...values) : 0
 }
 </script>
