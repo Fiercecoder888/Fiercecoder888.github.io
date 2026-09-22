@@ -63,6 +63,12 @@ jobs:
         env:
           # sitemap / RSS / llms.txt / canonical 都用它
           NUXT_PUBLIC_SITE_URL: ${{ steps.site.outputs.url }}
+          # 「Jev 决策台」的后端地址（部署在 Deno Deploy 上的 jev-api.ts）。
+          # 来源是**仓库变量** JEV_API_BASE（Settings → Secrets and variables →
+          # Actions → Variables，不是 Secret —— 它只是个 URL，本来就会进公开产物）。
+          # 没设时为空串，控制台会显示「还没接上后端」而不是假装能用。
+          # 注意这里**没有**、也不该有 API key：key 只存在 Deno Deploy 的环境变量里。
+          NUXT_PUBLIC_JEV_API_BASE: ${{ vars.JEV_API_BASE }}
 
       # GitHub Pages 默认跑 Jekyll，会忽略 _nuxt/ 这类下划线开头的目录
       - name: Disable Jekyll

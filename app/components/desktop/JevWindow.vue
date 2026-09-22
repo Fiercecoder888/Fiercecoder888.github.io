@@ -34,16 +34,17 @@
       {{ error }}
     </p>
 
-    <!-- 静态站点上的说明：必须一进来就说清，而不是等他点了「运行」才知道。
-         判据用 import.meta.dev —— 为 false 就是没有 Nitro 服务端的环境
-         （线上 Pages、nuxt preview 都算），此时 /api/jev/ask 根本不存在。 -->
+    <!-- 还没接上后端时才提示。接上之后（jevApiBase 有值）这里不出现，
+         线上和本地表现一致 —— 那时 window 就是真能用的。 -->
     <p
-      v-if="!isDev"
+      v-if="!isDev && !jevApiBase"
       class="shrink-0 border-b border-white/5 bg-amber-500/10 px-3 py-1.5 text-[11px] leading-relaxed text-amber-200"
       data-jev-static-notice
     >
-      静态站点上没有服务端，而 Jev 的 key 不能进浏览器 ——
-      所以「运行」在这里连不通。在本地跑 <code class="rounded bg-black/30 px-1">pnpm dev</code> 打开才可用。
+      还没接上后端：这个站是静态托管的，而 Jev 的 key 不能进浏览器。把
+      <code class="rounded bg-black/30 px-1">jev-api.ts</code> 部署到 Deno Deploy，
+      再把它的地址填进仓库变量 <code class="rounded bg-black/30 px-1">JEV_API_BASE</code> 即可。
+      （想临时用就在本地跑 <code class="rounded bg-black/30 px-1">pnpm dev</code>）
     </p>
 
     <div class="grid min-h-0 flex-1 grid-cols-1 divide-y divide-white/5 md:grid-cols-2 md:divide-x md:divide-y-0">
@@ -246,7 +247,7 @@
     </div>
 
     <div class="shrink-0 border-t border-white/5 px-3 py-1.5 text-[10px] text-slate-500">
-      只收 input token（$0.042 / 百万，输出免费）· 本页只在本地 <code>pnpm dev</code> 可用：静态站上没有后端，key 也不该进浏览器
+      只收 input token（$0.042 / 百万，输出免费）· 所有问题合并为一次请求 · key 只在服务端，不进浏览器
     </div>
   </div>
 </template>
@@ -301,12 +302,21 @@ interface AskResponse {
 const STORAGE_KEY = 'jev_console'
 
 /**
- * 有没有 Nitro 服务端。`pnpm dev` 为 true；`pnpm generate` 出的静态产物、
- * `nuxt preview` 都是 false —— 那时 `/api/jev/ask` 不存在，顶部会出一条说明。
- * 用编译期常量而不是发探针请求：不发多余的网络往返，也不会有 hydration 差异。
- * （窗口本身在 `<ClientOnly>` 里，且只有被点开才渲染，所以这里只在客户端求值。）
+ * 打开的是哪个后端。两种情况，路径都写 `/api/jev/ask`，只有 base 不同：
+ *
+ * - **本地 `pnpm dev`**：走同源的 Nitro 路由 `server/api/jev/ask.post.ts`，base 为空。
+ * - **线上静态站**：走 Deno Deploy 上的 `jev-api.ts`，base 取 `JEV_API_BASE`
+ *   （仓库变量 → `deploy.yml` 的 `NUXT_PUBLIC_JEV_API_BASE` → `nuxt.config.ts` 的
+ *   `runtimeConfig.public.jevApiBase`）。那个 worker 不校验路径，所以带上
+ *   `/api/jev/ask` 只是为了让两种环境的代码路径长得一样。
+ *
+ * 这个值是**公开**的（只是个 URL，不是密钥），所以放 `public` 里被烤进产物是正确的；
+ * key 全程只在服务端。`isDev` 也仍然有用：本地优先用同一个进程里的 Nitro 路由，
+ * 不必为了调试去连线上 worker。
  */
 const isDev = import.meta.dev
+const jevApiBase = String(useRuntimeConfig().public.jevApiBase || '').replace(/\/+$/, '')
+const endpoint = `${isDev ? '' : jevApiBase}/api/jev/ask`
 
 let uidSeed = 0
 function nextUid() {
@@ -437,7 +447,7 @@ async function run() {
   const startedAt = Date.now()
 
   try {
-    const res = await $fetch<{ code: number, message: string, data: AskResponse }>('/api/jev/ask', {
+    const res = await $fetch<{ code: number, message: string, data: AskResponse }>(endpoint, {
       method: 'POST',
       body: { state: state.value, questions: buildQuestions() },
     })
@@ -449,9 +459,10 @@ async function run() {
   }
   catch (err) {
     const e = err as { statusCode?: number, data?: { message?: string } }
-    // 静态托管上没有 /api/jev —— 404 时给一句能照做的提示，而不是默认的框架报错
+    // 线上还没配 JEV_API_BASE 时 endpoint 是 '/api/jev/ask'，静态站上必然 404。
+    // 给一句能照做的提示，而不是把框架的报错直接甩出来。
     error.value = e?.statusCode === 404
-      ? '这个页面只在本地 pnpm dev 下可用：静态站上没有后端，而 Jev 的 key 不能进浏览器'
+      ? '这个站上还没有后端：把 jev-api.ts 部署到 Deno Deploy，并把地址填进仓库变量 JEV_API_BASE（详见 docs/工作日志.md 旁的交接说明）'
       : (e?.data?.message || (err as Error).message || '调用失败')
   }
   finally {

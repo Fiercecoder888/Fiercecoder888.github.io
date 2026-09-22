@@ -59,9 +59,16 @@ export default defineNuxtConfig({
   //   NUXT_TYPESAFE_API_KEY   Jev 的 API key（放站点根目录 .env，已被 .gitignore 忽略）
   //   NUXT_TYPESAFE_BASE_URL  默认 https://api.typesafe.ai
   //   NUXT_TYPESAFE_MODEL     默认 jev-latest
+  //
+  // 唯一放在 public 里的 Jev 相关项是 jevApiBase —— 那是**公开信息**（只是个 URL），
+  // 而且是**故意**要被烤进静态产物的：线上静态站没有自己的服务端，得知道去哪儿找后端。
+  // 它由仓库变量 JEV_API_BASE 经 deploy.yml 的 NUXT_PUBLIC_JEV_API_BASE 注入。
+  // key 永远不进这里 —— 一旦进了 public，就等于公开发布。
   runtimeConfig: {
     public: {
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || SITE.url,
+      // 例：https://jev-api.<你的-org>.deno.dev —— 末尾斜杠会在组件里被去掉
+      jevApiBase: process.env.NUXT_PUBLIC_JEV_API_BASE || '',
     },
   },
 
