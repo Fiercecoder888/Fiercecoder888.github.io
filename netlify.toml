@@ -1,0 +1,18 @@
+# 这个 Netlify 站点**只用来跑一个函数**（「Jev 决策台」的后端），不发布任何网站内容。
+# 站点本身仍然在 GitHub Pages 上（https://fiercecoder888.github.io），这里不要动它。
+#
+# 为什么要这个文件：连上 GitHub 仓库后，Netlify 会自动识别出这是个 Nuxt 项目，
+# 于是默认填上 `nuxt build` + `dist` —— 那会把整个网站重新构建一遍（慢，而且没意义，
+# 我们只要那个函数）。netlify.toml 的优先级高于控制台里的设置，所以这里写死，
+# 免得每次都要去界面里手动清空。
+
+[build]
+  # 不做站点构建 —— 构建网站是 GitHub Actions + Pages 的活
+  command = "echo 'site build skipped: this Netlify site only hosts the Jev function'"
+  # Netlify 要求一个 publish 目录。用仓库里已有的 public/：里面全是本来就已经公开的
+  # 静态资源（应用图标 / 壁纸 / 光标），发出去不产生任何新的信息暴露。
+  publish = "public"
+
+[functions]
+  # 这本来就是 Netlify 的默认目录，显式写出来是为了让「新增了哪些路径」一眼可见
+  directory = "netlify/functions"
