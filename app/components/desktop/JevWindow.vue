@@ -21,6 +21,15 @@
       </button>
 
       <button
+        type="button"
+        class="rounded-md border border-white/10 px-2.5 py-1 text-xs text-slate-400 transition hover:border-white/20 hover:text-slate-200"
+        title="一键填好一组 choice 问题：意图 / 紧迫度 / 情绪 / 下一步 —— 全部带概率分布和把握度"
+        @click="loadAnalyzePreset"
+      >
+        填入分析
+      </button>
+
+      <button
         v-if="answers"
         type="button"
         class="rounded-md border px-2.5 py-1 text-xs transition"
@@ -472,6 +481,56 @@ function loadSample() {
       instructions: 'The message conveys urgency or time-sensitivity',
     },
   ]
+}
+
+/**
+ * 「分析一段消息」预设 —— 一整组 **choice** 问题，一次运行就给出参考图那种效果：
+ * 每组都有概率分布和置信度，最后一条直接给"下一步做什么"。
+ *
+ * 为什么全用 choice 而不用 noul：noul 只返回一个 0~1 的数，**没有分布、也没有置信度**
+ * —— 屏幕上只剩一个孤零零的数字，读者无从判断该不该信（真实踩过：连问两次是/否，
+ * 得到 0.45 和 0.90 两种结果，而界面上看不出哪个可信）。choice 把同一件事摊成
+ * 几个选项的概率，再附一个 confidence，"看得更多"就是这么来的。
+ *
+ * 为什么 instructions / criteria 写英文而 state 保持中文：实测同一段中文内容，
+ * 中文提问会把 score 的置信度从 0.99 拉到 0.84、分数系统性上漂约 +0.10。
+ */
+function loadAnalyzePreset() {
+  const preset: Array<[string, string, Record<string, string>]> = [
+    ['intent', 'What does the speaker mainly want from the reader?', {
+      advice: 'Wants concrete advice or a solution',
+      comfort: 'Wants to vent or be reassured',
+      action: 'Wants the reader to do something specific',
+      chat: 'Just casual chatting, no request at all',
+      unclear: 'Cannot tell from the message',
+    }],
+    ['urgency', 'How urgent or time-pressured is this message?', {
+      none: 'No time pressure at all',
+      mild: 'Somewhat rushed, but nothing is on fire',
+      urgent: 'Explicitly in a hurry or under time pressure',
+      desperate: 'Urgent AND helpless - asking to be rescued',
+    }],
+    ['emotion', 'What is the dominant emotion in the message?', {
+      neutral: 'Calm, factual, matter-of-fact',
+      anxious: 'Worried, uneasy, or tense',
+      upset: 'Annoyed, complaining, or resentful',
+      excited: 'Happy, eager, or enthusiastic',
+      low: 'Sad, tired, or down',
+    }],
+    ['next_action', 'What should the reader do next?', {
+      reply_now: 'Answer right away',
+      ask_detail: 'Ask for details before answering',
+      check_facts: 'Go check records or documents first',
+      hold: 'Stall for time, do not commit to anything',
+      escalate: 'Hand it over to a human',
+    }],
+  ]
+
+  questions.value = preset.map(([id, instructions, criteria]) => ({
+    ...makeQuestion('choice', id),
+    instructions,
+    options: Object.entries(criteria).map(([key, desc]) => ({ key, desc })),
+  }))
 }
 
 /* ── 请求 ─────────────────────────────────────────────── */
