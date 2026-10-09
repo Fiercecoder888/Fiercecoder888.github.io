@@ -58,6 +58,12 @@ jobs:
       - name: Check no secrets in worklog
         run: pnpm check:leaks
 
+      # 网页版「一轮引擎」的自检：脚本化 gateway，**不花一次 API 调用、不需要任何 key**。
+      # 保的是那些不花钱但最容易写错的地方 —— 对话解析、三态阈值、硬检查拦截、
+      # 缺必含项封顶 G、S = 0.7G + 0.3E、首选规则、请求体校验。
+      - name: Check Jev round engine
+        run: node tools/jev-round-check.mjs
+
       - name: Generate static site
         run: pnpm generate
         env:

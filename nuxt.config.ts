@@ -109,11 +109,15 @@ export default defineNuxtConfig({
   // 而桌面上的 Dock、顶栏菜单、Launchpad 全是 `<button>`（`DockItem.vue` 只对 `kind:'link'` 渲染 `<a>`），
   // 首页上没有任何指向 /progress、/worklog 的锚点 —— 不写在这里，它们在静态托管上就是 404。
   // 子页面（/worklog/<日期>、/progress/pitfalls 等）由这些页面里的 `<a>` 链到，会被自动爬取。
+  //
+  // `/jev`（聊天助手网页版）同理：它是个要贴给别人用的地址，站内没有锚点指向它，
+  // 所以必须写在这里 —— 否则线上直接 404，而本地 `pnpm dev` 一切正常，很难归因。
   nitro: {
     prerender: {
       routes: [
         '/', '/about', '/blog', '/tags',
         '/worklog', '/progress', '/progress/pitfalls', '/progress/stats',
+        '/jev',
         '/rss.xml', '/sitemap.xml', '/llms.txt', '/robots.txt',
       ],
     },

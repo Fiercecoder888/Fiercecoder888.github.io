@@ -17,6 +17,7 @@
  */
 
 import { askJev, JevError, validateRequest } from './server/utils/jev.ts'
+import { runDraftEndpoint, runRoundEndpoint } from './server/utils/jevRoundWiring.ts'
 
 /**
  * Jev 的调用逻辑（请求体校验、429/529 退避重试、错误翻译）**只有一份**：
@@ -176,6 +177,32 @@ export async function handler(
   }
   catch {
     return json({ code: 400, message: '请求体不是合法 JSON', data: null }, 400, origin)
+  }
+
+  /**
+   * 同一个 handler 还接两条路：`/round`（判断）与 `/draft`（起草 + 检查 + 打分）。
+   *
+   * 为什么挤在一个 handler 里而不是各写一个：CORS、限流、读 key 这三件事一旦复制成
+   * 三份，迟早分叉 —— 尤其限流，漏一份就等于开了一个口子。这里按路径后缀分发，
+   * 兜底仍然是原来的 `/ask`，老调用方行为一字不变。
+   * 挂载路径由 `netlify/functions/*.ts` 各自的 `config.path` 声明，三个互不影响。
+   */
+  let path = ''
+  try {
+    path = new URL(req.url).pathname
+  }
+  catch {
+    // 有的运行时给的是相对路径，退化成分割字符串
+    path = req.url.split('?')[0] || ''
+  }
+  path = path.replace(/\/+$/, '')
+
+  if (path.endsWith('/round') || path.endsWith('/draft')) {
+    const jevConfig = { apiKey, baseUrl: BASE_URL, model: 'jev-latest' }
+    const result = path.endsWith('/round')
+      ? await runRoundEndpoint(body, jevConfig)
+      : await runDraftEndpoint(body, jevConfig)
+    return json(result.body, result.status, origin)
   }
 
   const problem = validateRequest(body?.state, body?.questions)
