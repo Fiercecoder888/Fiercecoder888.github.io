@@ -114,6 +114,19 @@ node tools/jev-endpoints-check.mjs --base http://localhost:3011   # 9 项：四�
 第二条要一个正在跑的 dev server；配了 key 的环境里它会真的调 Jev 并**查内容**
 （「HTTP 200 但一片零」是最危险的失败，只查状态码查不出来）。
 
+还有第三条：**真浏览器**。它验的是前两条都覆盖不到的那一段 —— 页面挂载、表单取值、
+点击到请求、结果渲染。**会真的调 Jev（约 2 次），所以别放进 CI**：
+
+```powershell
+node tools/jev-page-check.mjs                               # 默认打线上
+node tools/jev-page-check.mjs --base http://localhost:3011  # 打本地 dev
+```
+
+用系统 Chrome 走 CDP（原生 WebSocket，无第三方依赖），真的打字、点「判断」、读渲染
+出来的结果，再点一次「起草候选回复」。它写的时候踩过三个坑，都记在文件注释里 ——
+其中两个是脚本自己的毛病（改 DOM 的 value 会被 Vue 回滚、v-model 异步导致抢跑点了
+disabled 的按钮），看起来都像「页面坏了」。
+
 ---
 
 ## 已知的边界
