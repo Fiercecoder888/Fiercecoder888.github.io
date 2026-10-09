@@ -54,21 +54,31 @@ OPENROUTER_API_KEY=...             # 可选：起草候选回复要用；不配�
 
 ---
 
-## 线上要配什么
+## 线上现在是什么状态（2026-09-28 实测）
 
-网页是 GitHub Pages 上的纯静态产物，没有 Node 运行时，所以判断必须打到外面那个函数上：
+| 环节 | 状态 |
+|---|---|
+| 页面 `/jev/` | ✅ 已上线 |
+| 后端地址 `JEV_API_BASE` | ✅ 已配（`https://iridescent-smakager-5b2765.netlify.app`） |
+| 判断 `/api/jev/round` | ✅ **可用**。实测一次真实调用：2 次 Jev 请求 / 229 ms，10 条行为里命中 4 条（98% 认出「给了明确截止时间」），立场给了分布，置信度 0.48，3 个不确定项如实上交 |
+| 起草 `/api/jev/draft` | ⚠️ **差一个有效的 key**。函数与调用链都是通的，但线上那把 key 被 OpenRouter 拒了：`401 Missing Authentication header` —— 换一把有效的 `OPENROUTER_API_KEY` 即可（页面会把这句话原样显示出来，不装成功） |
 
-1. **部署两个函数**：仓库里 `netlify/functions/jev-round.ts`（判断）与
-   `netlify/functions/jev-draft.ts`（起草+检查）已经写好，各挂 `/api/jev/round`、
-   `/api/jev/draft`。它们和老的 `jev-api.ts`（`/api/jev/ask`）**共用同一个 handler**
-   —— CORS、限流、读 key 只有一份。
-2. **给函数配环境变量**：`TYPESAFE_API_KEY`（必须），`OPENROUTER_API_KEY`（可选）。
-   key 只活在平台侧，**永远不进仓库、不进前端产物**。
+Netlify 那个站点是**从仓库自动部署**的，所以 `netlify/functions/*.ts` 一进 main 就跟着上线，
+不用手动发。以后改这两个端点，推一次 main 就等于部署。
+
+下面三步是这套东西的完整配法（本仓库已经做完前两步），换台机器/换个站点时照这个来：
+
+1. **部署两个函数**：`netlify/functions/jev-round.ts`（判断）与 `jev-draft.ts`（起草+检查）
+   各挂 `/api/jev/round`、`/api/jev/draft`。它们和老的 `jev-api.ts`（`/api/jev/ask`）
+   **共用同一个 handler** —— CORS、限流、读 key 只有一份，不会两边分叉。
+2. **给函数配环境变量**：`TYPESAFE_API_KEY`（必须，判断这一路全靠它）、
+   `OPENROUTER_API_KEY`（起草要用）。key 只活在平台侧，**永远不进仓库、不进前端产物**。
 3. **给仓库配变量** `JEV_API_BASE` = 函数所在站点的地址（Settings → Secrets and
    variables → Actions → Variables，不是 Secret —— 它只是个 URL，本来就会进公开产物）。
    `deploy.yml` 会把它传给构建：`NUXT_PUBLIC_JEV_API_BASE`。
-4. 重新触发一次部署（推一次 main 或在 Actions 里手动跑）。**没配第 3 步时页面顶部会明说
-   「还没接上后端」**，而不是等一个 404 —— 这是刻意做的：假装能用比报错糟。
+
+**没配第 3 步时页面顶部会明说「还没接上后端」**，而不是等一个 404 —— 这是刻意做的：
+假装能用比报错糟。
 
 限流在函数里：**每 IP 每分钟 20 次**。一轮判断约 2 次 Jev 调用、起草约 4 次
 （1 次 chat + 3 次检查），一轮的量级是几厘钱。
