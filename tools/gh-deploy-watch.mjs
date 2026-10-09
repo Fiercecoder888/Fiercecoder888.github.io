@@ -2,12 +2,28 @@
 /**
  * 等某次 GitHub Actions 部署跑完，然后探测线上站点是否真的上线。
  * 用法: node --use-system-ca tools/gh-deploy-watch.mjs [sha] [--site https://x.github.io]
+ *
+ * 不给 sha 时锚定**本地 HEAD**（不是「最新的那次 run」）。
+ * 为什么改：原先默认取 runs[0]，于是「刚 push 下一条提交」时会盯上**上一条**的部署 ——
+ * 它报 success，而线上其实还是旧版（实测踩过：核验四项全红，才发现盯错了 run）。
+ * 指定 sha 永远最稳；这里只是让默认行为也不骗人。若 HEAD 还没 push，会明确报出来。
  */
+import { execFileSync } from 'node:child_process'
+
 const repo = process.env.GH_REPO || 'Fiercecoder888/Fiercecoder888.github.io'
 const site = process.argv.includes('--site')
   ? process.argv[process.argv.indexOf('--site') + 1]
   : 'https://fiercecoder888.github.io/'
-const sha = (process.argv[2] || '').replace(/^--.*/, '') || process.env.GH_SHA || ''
+/** 本地 HEAD 的完整 sha；不在 git 仓库里就退回空字符串（退回旧行为） */
+function headSha() {
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  }
+  catch {
+    return ''
+  }
+}
+const sha = (process.argv[2] || '').replace(/^--.*/, '') || process.env.GH_SHA || headSha()
 
 const h = {
   accept: 'application/vnd.github+json',
@@ -29,7 +45,9 @@ for (let i = 0; i < 20 && !run; i++) {
   if (!run) await sleep(5000)
 }
 if (!run) {
-  console.log('没找到对应的运行')
+  console.log(sha
+    ? `没找到 ${sha.slice(0, 7)} 对应的运行 —— 这条提交推送了吗？（也可以显式传 sha：node tools/gh-deploy-watch.mjs <sha>）`
+    : '没找到对应的运行')
   process.exit(1)
 }
 console.log(`监控 run #${run.run_number} (${run.head_sha.slice(0, 7)}) ${run.html_url}\n`)
