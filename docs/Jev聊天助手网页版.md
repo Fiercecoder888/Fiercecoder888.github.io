@@ -122,6 +122,13 @@ node tools/jev-endpoints-check.mjs --base http://localhost:3011   # 9 项：四�
   「截图 → 视觉模型 OCR」，但那是另一条路）。
 - **矩阵没搬全**：原产品按「行为 × 关系」的手工矩阵决定位置与下一步（逐格 pin 过），
   这里用的是每个行为自带的 `nextStep` —— 是明确的简化，不是等价物。
+- **场景表是压缩复刻，不是移植**：上游 78 个行为压成 46 个；所有问句是从上游的英文
+  动词短语（不是疑问句）**改写**成中文是非题的；`nextStep` 上游根本没有这个字段；
+  通用场景的 3 条语气题是我们补的（上游那一栏是空的）。
+- **还丢了这些上游字段**：`apologyByRelationship`（上游「对下属一律降为 optional」那种
+  按关系的降级，这里一律取主导值）、`avoidUnlessDetail` / `input` / `clarifyOnly` /
+  `noReply` / `confirmChecks`。要复刻得另开字段。
 - **阈值是我们定的**（检测 0.5 / 不确定 0.35 / 拦截 0.5），原产品的标定值在
   `Analysis.kt` 里，没有移植。
-- 署名要求：保留上游 LICENSE 与 NOTICE、注明出处，**不得**用其名称或域名暗示对方为本站背书。
+- 署名要求：MIT，Copyright (c) 2026 Finderchangchang and the jev-chat contributors。
+  保留上游 LICENSE 与 NOTICE、注明出处，**不得**用其名称或域名暗示对方为本站背书。
