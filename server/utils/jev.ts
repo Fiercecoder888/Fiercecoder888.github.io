@@ -188,12 +188,37 @@ export async function askJev(
 
     if (response.ok) {
       const body = (await response.json().catch(() => null)) as
-        | { model?: string, answers?: Record<string, unknown>, usage?: JevUsage }
+        | {
+          model?: string
+          answers?: Record<string, unknown>
+          usage?: JevUsage
+          title?: string
+          detail?: string
+        }
         | null
       if (!body) throw new JevError(502, 'Jev 返回的不是 JSON')
+
+      /**
+       * 200 也可能是**礼貌的拒绝**。
+       *
+       * 实测（2026-09-28）：请求没带 key 的问题时会走到这里 —— TypeSafe 以 200
+       * 回一个 `{"title":"Typesafe is not available in your region"}`，body 里
+       * 根本没有 `answers`。以前这里直接 `body.answers ?? {}` 返回，于是调用方
+       * 拿到的是**一片零**：界面上显示「所有概率 0.0%、没有检测到任何行为」，
+       * 看上去像「Jev 判定对方什么都没做」，而不是「这次调用根本没成功」。
+       * 这种失败比报错危险得多，所以这里必须拦住。
+       *
+       * 问了一组非空问题却一个答案都没有，只有两种可能：对方换了返回形状，
+       * 或者这次调用被挡了。两种都不该被当成结论。
+       */
+      if (!isPlainObject(body.answers) || !Object.keys(body.answers).length) {
+        const hint = [body.title, body.detail].filter(Boolean).join('：')
+        throw new JevError(502, `Jev 返回 200 但一个答案都没有${hint ? `（${hint}）` : ''}`)
+      }
+
       return {
         model: body.model ?? config.model,
-        answers: body.answers ?? {},
+        answers: body.answers,
         usage: body.usage ?? {},
       }
     }
