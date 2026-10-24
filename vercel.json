@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "pnpm generate",
+  "outputDirectory": ".output/public",
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "github": {
+    "silent": true
+  }
+}
