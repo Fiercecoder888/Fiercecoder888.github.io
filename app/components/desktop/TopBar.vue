@@ -376,6 +376,14 @@ function minimizeAll() {
   }
 }
 
+/**
+ * 菜单栏时钟：**跟随访客本地时间**，不做时区换算（macOS 的默认行为）。
+ *
+ * 有一条别改坏：`clock` 的初值是空串，只在 onMounted 之后才填。所以服务端渲染
+ * 出来是空的，构建机（GitHub Actions 跑在 UTC）的时间不会被烤进 HTML。
+ * 这条很关键 —— 一旦在 setup 里直接算，首屏就会闪一下构建时的时间，
+ * 看着像"站点时间不准"，其实是把构建机的时间印上去了。
+ */
 function updateClock() {
   const now = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
