@@ -644,6 +644,69 @@ textarea,
 }
 
 
+/* ============ 窗口出现 / 消失动画 ============
+ *
+ * 参照 macOS 的手感：窗口从底部（Dock 那一侧）**长**出来，先略微过冲再落定。
+ *
+ * 三个刻意的选择：
+ *   1. 只动 `opacity` + `transform`，不动 width/height —— 后者每帧都要重排，
+ *      表现就是"一顿一顿"，而不是"丝滑"。
+ *   2. 曲线用 `cubic-bezier(0.16, 1.16, 0.24, 1)`，末段有轻微过冲。纯粹的
+ *      ease-out 看起来只是"淡入"，带一点回弹才有"弹出来"的物理感。
+ *   3. `transform-origin: 50% 100%` —— 从底边中点展开，和 Dock 的位置对得上；
+ *      居中展开会像"原地放大"，不像"从下面冒出来"。
+ *
+ * 关窗比开窗快（170ms vs 340ms）：让人走得干脆，留着才需要慢。
+ */
+.win-panel {
+  transform-origin: 50% 100%;
+  backface-visibility: hidden;
+}
+
+.win-enter-active {
+  /* 透明度与缩放**分开走两条曲线**：透明度快（160ms，先"看见"），
+   * 缩放慢一点、末尾带轻微回弹（380ms）。合在一起用一个曲线时，为了赶上
+   * 缩放的回弹，透明度会被迫在 50ms 内冲到 0.8 以上 —— 观感是"抢"，不是"丝滑"。 */
+  animation:
+    win-fade-in 160ms ease-out both,
+    win-scale-in 380ms cubic-bezier(0.34, 1.28, 0.64, 1) both;
+  will-change: transform, opacity;
+}
+.win-leave-active {
+  animation: win-out 170ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+@keyframes win-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes win-scale-in {
+  from { transform: scale(0.9) translateY(10px); }
+  to { transform: none; }
+}
+
+@keyframes win-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.94) translateY(6px);
+  }
+}
+
+/* 系统里关掉了动效就别硬演 */
+@media (prefers-reduced-motion: reduce) {
+  .win-enter-active,
+  .win-leave-active {
+    animation-duration: 1ms;
+  }
+}
+
+
 /* macOS 窗口三色按钮（移植 macos-web 的 TrafficLights） */.mac-btn {
   height: 13px;
   width: 13px;

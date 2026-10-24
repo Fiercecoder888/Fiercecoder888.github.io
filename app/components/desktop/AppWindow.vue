@@ -1,9 +1,21 @@
 <template>
-  <div
-    v-if="win && win.isOpen && !win.isMinimize"
-    ref="root"
-    :data-window="props.id"
-    class="fixed overflow-hidden rounded-xl border border-white/10 bg-slate-900/85 shadow-2xl shadow-black/60 backdrop-blur-2xl"
+  <!--
+    窗口出现/消失交给 <Transition>（动画在 main.css 的 `win-*`）。
+
+    `appear` 是必须的：这个组件由父层的 `v-for="win in store.opened"` 渲染，
+    **开一个窗口 = 组件挂载**，而 Transition 默认只对"挂载之后 v-if 翻转"播放动画。
+    没有 appear，开窗就是硬蹦出来（实测过：`win-enter-active` 一次都不出现）。
+    有了它，开窗、最小化、从最小化恢复三条路都有动画。
+
+    关窗走 closeAnimated()：父层是 v-for，卸载组件等于元素立刻消失，
+    所以先在元素上补一个离场类、等动画播完再真正关掉。
+  -->
+  <Transition name="win" appear>
+    <div
+      v-if="win && win.isOpen && !win.isMinimize"
+      ref="root"
+      :data-window="props.id"
+      class="win-panel fixed overflow-hidden rounded-xl border border-white/10 bg-slate-900/85 shadow-2xl shadow-black/60 backdrop-blur-2xl"
     :class="win.isMaximized ? 'inset-2 !w-auto !h-auto' : ''"
     :style="win.isMaximized ? { zIndex: win.zIndex } : { left: `${win.x ?? 0}px`, top: `${win.y ?? 0}px`, width: `${win.width}px`, height: `${win.height}px`, zIndex: win.zIndex }"
     @pointerdown="store.focus(props.id)"
@@ -22,7 +34,7 @@
           data-action="close"
           class="mac-btn btn-close grid place-items-center"
           :title="`关闭 ${win.title}`"
-          @click.stop="store.close(props.id)"
+          @click.stop="closeAnimated"
         >
           <DesktopOsIcon name="close" class="h-2 w-2 text-black/70" />
         </button>
@@ -76,7 +88,8 @@
         @pointerdown.stop="startResize($event, 'se')"
       />
     </template>
-  </div>
+    </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">
@@ -164,6 +177,28 @@ function stopResize() {
   resizing.value = null
   window.removeEventListener('pointermove', onResize)
   window.removeEventListener('pointerup', stopResize)
+}
+
+/**
+ * 关窗：先播离场动画再真正移除。
+ *
+ * 为什么不交给 <Transition>：父层是 `v-for="win in store.opened"`，`store.close()`
+ * 会把这条记录删掉，组件随即卸载 —— 元素当场消失，内层的离场动画没有机会播。
+ * 所以这里手动补一个 `win-leave-active`（动画本身在 main.css 里定义），
+ * 等它播完（170ms，留 15ms 余量）再真正关。
+ */
+const closing = ref(false)
+
+function closeAnimated() {
+  if (closing.value) return
+  const el = root.value
+  if (!el) {
+    store.close(props.id)
+    return
+  }
+  closing.value = true
+  el.classList.add('win-leave-active')
+  window.setTimeout(() => store.close(props.id), 185)
 }
 
 onMounted(() => {

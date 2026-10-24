@@ -33,7 +33,7 @@
         <li><span class="text-gray-700">框架</span>：Nuxt 4（Vue 3 SSR）</li>
         <li><span class="text-gray-700">内容</span>：Nuxt Content v3，Markdown 写文章</li>
         <li><span class="text-gray-700">样式</span>：TailwindCSS v4</li>
-        <li><span class="text-gray-700">桌面 OS</span>：Pinia 窗口管理器 + Dock（抄自 macos-web，视觉按 xiaohev 博客）</li>
+        <li><span class="text-gray-700">桌面 OS</span>：Pinia 窗口管理器 + Dock（距离放大、弹簧动效、窗口可拖拽缩放）</li>
         <li><span class="text-gray-700">评论</span>：自建 Nitro API + SQLite</li>
         <li><span class="text-gray-700">SEO</span>：sitemap.xml、rss.xml、robots.txt（放行 AI 爬虫）、llms.txt</li>
       </ul>

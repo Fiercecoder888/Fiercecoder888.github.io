@@ -12,7 +12,7 @@ export const SITE = {
   /** 站点名（出现在标题栏、菜单栏、RSS、llms.txt、页脚） */
   name: '我的博客',
   /** 作者昵称 */
-  author: '站长',
+  author: 'Fiercecoder888',
   /** 头像里显示的字（一个字最好看） */
   avatarText: '我',
   /** 一句话身份，例如「前端 / 全栈开发者」 */
@@ -27,9 +27,9 @@ export const SITE = {
   /** 以下信息会出现在「关于我」页面 */
   location: '中国',
   /** 邮箱：关于页会渲染成可点的 mailto 链接。不想公开就填空串 '' */
-  email: 'you@example.com',
+  email: '',
   /** GitHub：关于页会渲染成可点的链接（写 github.com/xxx 即可，会自动补 https://）。不想公开就填空串 '' */
-  github: 'github.com/yourname',
+  github: 'github.com/Fiercecoder888',
   /**
    * 其它社交链接（掘金 / 知乎 / X / 个人域名…），按顺序渲染到关于页；
    * 值只要长得像网址或邮箱，就会自动变成可点链接。

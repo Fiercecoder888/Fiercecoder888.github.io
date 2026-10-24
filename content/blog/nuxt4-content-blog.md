@@ -1,6 +1,6 @@
 ---
 title: 用 Nuxt 4 + Nuxt Content v3 搭一个博客，顺便把 SEO 做全
-description: 从零搭一个 Markdown 驱动的个人博客，并补上 sitemap、RSS、robots.txt 与 llms.txt 这四件套——这套做法是参考小贺的博客学的。
+description: 从零搭一个 Markdown 驱动的个人博客，并补上 sitemap、RSS、robots.txt 与 llms.txt 这四件套——不引 SEO 模块，四个文件全自己写。
 date: '2026-09-09'
 category: 前端
 tags:
@@ -51,7 +51,7 @@ const { data: posts } = await useAsyncData('posts', () =>
 
 ## SEO 四件套
 
-小贺的博客在这块做得挺完整，我照着抄了一遍。区别是他用 Nuxt SEO 模块，我直接手写了四个 server route，少一个依赖。
+这一块我没有引 SEO 模块：sitemap、RSS、robots.txt、llms.txt 全手写成了四个 server route，少一个依赖，也顺便把每个文件该长什么样弄清楚了。
 
 ### 1. sitemap.xml
 

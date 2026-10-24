@@ -46,7 +46,7 @@ const { data: worklogs } = await useAsyncData('terminal-worklogs', () =>
 )
 
 const lines = ref<Line[]>([
-  { type: 'muted', text: 'XiaoHe-Style Blog Terminal · 输入 help 查看命令' },
+  { type: 'muted', text: 'Fiercecoder888 Terminal · 输入 help 查看命令' },
 ])
 const command = ref('')
 const history = ref<string[]>([])

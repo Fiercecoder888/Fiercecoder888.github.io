@@ -6,7 +6,7 @@
       </span>
       <div>
         <p class="text-base font-semibold text-white">{{ SITE.name }}</p>
-        <p class="text-[11px] text-slate-500">复刻 xiaohev.com 的桌面 OS 风格</p>
+        <p class="text-[11px] text-slate-500">{{ SITE.role }} · 一个桌面 OS 风格的个人站</p>
       </div>
     </div>
 

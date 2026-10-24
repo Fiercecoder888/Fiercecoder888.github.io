@@ -70,7 +70,7 @@
           <input
             v-model="form.email"
             type="email"
-            placeholder="you@example.com"
+            placeholder="你的邮箱（不会公开）"
             class="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400"
           >
         </label>
